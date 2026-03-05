@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  slack-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: slack-ai-assistant
+    restart: unless-stopped
+    environment:
+      # Slack Configuration
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET:-}
+      
+      # AI Configuration
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-claude-sonnet-4-20250514}
+      
+      # Application Settings
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATABASE_PATH=/app/data/assistant.db
+      - MAX_HISTORY_MESSAGES=${MAX_HISTORY_MESSAGES:-50}
+      - SESSION_TIMEOUT_MINUTES=${SESSION_TIMEOUT_MINUTES:-60}
+      
+      # Security Settings
+      - DM_POLICY=${DM_POLICY:-pairing}
+      - ALLOWED_USERS=${ALLOWED_USERS:-*}
+      - ALLOWED_CHANNELS=${ALLOWED_CHANNELS:-*}
+      
+      # Feature Flags
+      - ENABLE_THREAD_SUMMARY=${ENABLE_THREAD_SUMMARY:-true}
+      - ENABLE_TASK_SCHEDULER=${ENABLE_TASK_SCHEDULER:-true}
+      - ENABLE_REACTIONS=${ENABLE_REACTIONS:-true}
+      - ENABLE_TYPING_INDICATOR=${ENABLE_TYPING_INDICATOR:-true}
+    volumes:
+      # Persist database
+      - assistant-data:/app/data
+      # Persist logs
+      - assistant-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  assistant-data:
+    driver: local
+  assistant-logs:
+    driver: local
+
+# Optional: Use external networks for integration
+# networks:
+#   default:
+#     external:
+#       name: my-network

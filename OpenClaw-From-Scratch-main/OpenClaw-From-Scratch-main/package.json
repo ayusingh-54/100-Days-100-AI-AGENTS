@@ -1,0 +1,49 @@
+{
+  "name": "slack-ai-assistant-v2",
+  "version": "2.0.0",
+  "description": "Advanced Slack AI Assistant with RAG, Memory, and MCP support",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "setup-db": "tsx scripts/setup-db.ts",
+    "index-now": "tsx scripts/run-indexer.ts",
+    "lint": "eslint src/**/*.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.27.0",
+    "@slack/bolt": "^4.1.0",
+    "@slack/web-api": "^7.5.0",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "mem0ai": "^1.0.2",
+    "node-cron": "^3.0.3",
+    "openai": "^4.67.0",
+    "winston": "^3.14.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.7.4",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "slack",
+    "ai",
+    "assistant",
+    "rag",
+    "memory",
+    "mcp",
+    "chatbot"
+  ],
+  "author": "",
+  "license": "MIT"
+}

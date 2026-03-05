@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/ayusingh-54/100-Days-100-AI-AGENTS-/discussions
+    about: Have a question? Start a discussion!
+  - name: 📧 Email Support
+    url: mailto:ayusingh693@gmail.com
+    about: For sensitive issues, contact via email
+  - name: 📖 Documentation
+    url: https://github.com/ayusingh-54/100-Days-100-AI-AGENTS-#readme
+    about: Check out the documentation first
