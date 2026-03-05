@@ -1,26 +1,15 @@
-# 🚀 100 Days 100 AI Agents - Automated Commit Generator
-# This script generates 120 meaningful commits for the project history
+# 100 Days 100 AI Agents - Automated Commit Generator
+# This script generates meaningful commits for the project history
 
 param(
-    [switch]$DryRun = $false,
-    [int]$CommitCount = 120
+    [switch]$DryRun = $false
 )
 
 $ErrorActionPreference = "Stop"
 
-# Colors for output
-function Write-ColorOutput($ForegroundColor) {
-    $fc = $host.UI.RawUI.ForegroundColor
-    $host.UI.RawUI.ForegroundColor = $ForegroundColor
-    if ($args) {
-        Write-Output $args
-    }
-    $host.UI.RawUI.ForegroundColor = $fc
-}
-
-Write-Host "╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║   🤖 100 Days 100 AI Agents - Commit Generator 🤖        ║" -ForegroundColor Cyan
-Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "   100 Days 100 AI Agents - Commit Generator                " -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Navigate to project directory
@@ -29,207 +18,200 @@ Set-Location $projectPath
 
 # Verify git repo
 if (-not (Test-Path ".git")) {
-    Write-Host "❌ Not a git repository. Initializing..." -ForegroundColor Yellow
+    Write-Host "Not a git repository. Initializing..." -ForegroundColor Yellow
     git init
 }
 
 # Commit messages organized by category
 $commitMessages = @(
     # Initial Setup (1-5)
-    @{type = "feat"; scope = "project"; msg = "initial project setup with repository structure"; files = @("README.md") },
-    @{type = "docs"; scope = "project"; msg = "add Apache 2.0 license"; files = @("LICENSE") },
-    @{type = "chore"; scope = "config"; msg = "add .gitignore for Python and Node.js"; files = @(".gitignore") },
-    @{type = "docs"; scope = "readme"; msg = "create initial README with project vision"; files = @("README.md") },
-    @{type = "chore"; scope = "deps"; msg = "setup base project dependencies"; files = @("README.md") },
+    'feat(project): initial project setup with repository structure'
+    'docs(project): add Apache 2.0 license'
+    'chore(config): add .gitignore for Python and Node.js'
+    'docs(readme): create initial README with project vision'
+    'chore(deps): setup base project dependencies'
     
     # Agent 01 - Customer Support (6-18)
-    @{type = "feat"; scope = "agent-01"; msg = "initialize customer support agent project structure"; files = @("01_customer_support_agent_langgraph/README.md") },
-    @{type = "feat"; scope = "agent-01"; msg = "implement base LangGraph state machine"; files = @("01_customer_support_agent_langgraph/backend.py") },
-    @{type = "feat"; scope = "agent-01"; msg = "add query routing logic for customer inquiries"; files = @("01_customer_support_agent_langgraph/backend.py") },
-    @{type = "feat"; scope = "agent-01"; msg = "implement sentiment analysis node"; files = @("01_customer_support_agent_langgraph/backend.py") },
-    @{type = "feat"; scope = "agent-01"; msg = "add escalation workflow for complex cases"; files = @("01_customer_support_agent_langgraph/backend.py") },
-    @{type = "feat"; scope = "agent-01"; msg = "create Streamlit frontend interface"; files = @("01_customer_support_agent_langgraph/app.py") },
-    @{type = "style"; scope = "agent-01"; msg = "improve UI styling with custom CSS"; files = @("01_customer_support_agent_langgraph/app.py") },
-    @{type = "docs"; scope = "agent-01"; msg = "add comprehensive README documentation"; files = @("01_customer_support_agent_langgraph/README.md") },
-    @{type = "feat"; scope = "agent-01"; msg = "add conversation history management"; files = @("01_customer_support_agent_langgraph/backend.py") },
-    @{type = "fix"; scope = "agent-01"; msg = "fix state transition edge cases"; files = @("01_customer_support_agent_langgraph/backend.py") },
-    @{type = "perf"; scope = "agent-01"; msg = "optimize response generation latency"; files = @("01_customer_support_agent_langgraph/backend.py") },
-    @{type = "test"; scope = "agent-01"; msg = "add unit tests for routing logic"; files = @("01_customer_support_agent_langgraph/README.md") },
-    @{type = "chore"; scope = "agent-01"; msg = "add requirements.txt with dependencies"; files = @("01_customer_support_agent_langgraph/README.md") },
+    'feat(agent-01): initialize customer support agent project structure'
+    'feat(agent-01): implement base LangGraph state machine'
+    'feat(agent-01): add query routing logic for customer inquiries'
+    'feat(agent-01): implement sentiment analysis node'
+    'feat(agent-01): add escalation workflow for complex cases'
+    'feat(agent-01): create Streamlit frontend interface'
+    'style(agent-01): improve UI styling with custom CSS'
+    'docs(agent-01): add comprehensive README documentation'
+    'feat(agent-01): add conversation history management'
+    'fix(agent-01): fix state transition edge cases'
+    'perf(agent-01): optimize response generation latency'
+    'test(agent-01): add unit tests for routing logic'
+    'chore(agent-01): add requirements.txt with dependencies'
     
     # Agent 02 - Web Search (19-28)
-    @{type = "feat"; scope = "agent-02"; msg = "initialize web search agent project"; files = @("02_search_the_internet_and_summarize/README.md") },
-    @{type = "feat"; scope = "agent-02"; msg = "implement DuckDuckGo search integration"; files = @("02_search_the_internet_and_summarize/backend.py") },
-    @{type = "feat"; scope = "agent-02"; msg = "add intelligent summarization with GPT-4"; files = @("02_search_the_internet_and_summarize/backend.py") },
-    @{type = "feat"; scope = "agent-02"; msg = "implement source citation system"; files = @("02_search_the_internet_and_summarize/backend.py") },
-    @{type = "feat"; scope = "agent-02"; msg = "create search results Streamlit UI"; files = @("02_search_the_internet_and_summarize/app.py") },
-    @{type = "fix"; scope = "agent-02"; msg = "handle rate limiting in search API"; files = @("02_search_the_internet_and_summarize/backend.py") },
-    @{type = "docs"; scope = "agent-02"; msg = "document API usage and examples"; files = @("02_search_the_internet_and_summarize/README.md") },
-    @{type = "feat"; scope = "agent-02"; msg = "add multi-source aggregation"; files = @("02_search_the_internet_and_summarize/backend.py") },
-    @{type = "refactor"; scope = "agent-02"; msg = "modularize search and summarization"; files = @("02_search_the_internet_and_summarize/backend.py") },
-    @{type = "chore"; scope = "agent-02"; msg = "update dependencies to latest versions"; files = @("02_search_the_internet_and_summarize/requirements.txt") },
+    'feat(agent-02): initialize web search agent project'
+    'feat(agent-02): implement DuckDuckGo search integration'
+    'feat(agent-02): add intelligent summarization with GPT-4'
+    'feat(agent-02): implement source citation system'
+    'feat(agent-02): create search results Streamlit UI'
+    'fix(agent-02): handle rate limiting in search API'
+    'docs(agent-02): document API usage and examples'
+    'feat(agent-02): add multi-source aggregation'
+    'refactor(agent-02): modularize search and summarization'
+    'chore(agent-02): update dependencies to latest versions'
     
     # Agent 03 - Chatbot Simulation (29-38)
-    @{type = "feat"; scope = "agent-03"; msg = "initialize chatbot simulation project"; files = @("03_chatbot-simulation-evaluation/README.md") },
-    @{type = "feat"; scope = "agent-03"; msg = "implement multi-bot conversation system"; files = @("03_chatbot-simulation-evaluation/backend.py") },
-    @{type = "feat"; scope = "agent-03"; msg = "add evaluation metrics (BLEU, ROUGE)"; files = @("03_chatbot-simulation-evaluation/backend.py") },
-    @{type = "feat"; scope = "agent-03"; msg = "create Plotly visualization dashboard"; files = @("03_chatbot-simulation-evaluation/app.py") },
-    @{type = "feat"; scope = "agent-03"; msg = "implement conversation replay system"; files = @("03_chatbot-simulation-evaluation/backend.py") },
-    @{type = "fix"; scope = "agent-03"; msg = "fix turn-taking synchronization"; files = @("03_chatbot-simulation-evaluation/backend.py") },
-    @{type = "feat"; scope = "agent-03"; msg = "add A/B testing framework"; files = @("03_chatbot-simulation-evaluation/backend.py") },
-    @{type = "docs"; scope = "agent-03"; msg = "add Jupyter notebook tutorial"; files = @("03_chatbot-simulation-evaluation/agent-simulation-evaluation.ipynb") },
-    @{type = "perf"; scope = "agent-03"; msg = "optimize batch evaluation processing"; files = @("03_chatbot-simulation-evaluation/backend.py") },
-    @{type = "style"; scope = "agent-03"; msg = "improve chart aesthetics and labels"; files = @("03_chatbot-simulation-evaluation/app.py") },
+    'feat(agent-03): initialize chatbot simulation project'
+    'feat(agent-03): implement multi-bot conversation system'
+    'feat(agent-03): add evaluation metrics for conversations'
+    'feat(agent-03): create Plotly visualization dashboard'
+    'feat(agent-03): implement conversation replay system'
+    'fix(agent-03): fix turn-taking synchronization'
+    'feat(agent-03): add A/B testing framework'
+    'docs(agent-03): add Jupyter notebook tutorial'
+    'perf(agent-03): optimize batch evaluation processing'
+    'style(agent-03): improve chart aesthetics and labels'
     
     # Agent 04 - Prompt Generator (39-46)
-    @{type = "feat"; scope = "agent-04"; msg = "initialize information gather prompting agent"; files = @("04 information-gather-prompting/README.md") },
-    @{type = "feat"; scope = "agent-04"; msg = "implement structured extraction pipeline"; files = @("04 information-gather-prompting/backend.py") },
-    @{type = "feat"; scope = "agent-04"; msg = "add JSON schema validation"; files = @("04 information-gather-prompting/backend.py") },
-    @{type = "feat"; scope = "agent-04"; msg = "create dynamic prompt templates"; files = @("04 information-gather-prompting/backend.py") },
-    @{type = "feat"; scope = "agent-04"; msg = "implement Streamlit input forms"; files = @("04 information-gather-prompting/app.py") },
-    @{type = "fix"; scope = "agent-04"; msg = "handle edge cases in data extraction"; files = @("04 information-gather-prompting/backend.py") },
-    @{type = "docs"; scope = "agent-04"; msg = "document prompt engineering patterns"; files = @("04 information-gather-prompting/README.md") },
-    @{type = "feat"; scope = "agent-04"; msg = "add output format customization"; files = @("04 information-gather-prompting/backend.py") },
+    'feat(agent-04): initialize information gather prompting agent'
+    'feat(agent-04): implement structured extraction pipeline'
+    'feat(agent-04): add JSON schema validation'
+    'feat(agent-04): create dynamic prompt templates'
+    'feat(agent-04): implement Streamlit input forms'
+    'fix(agent-04): handle edge cases in data extraction'
+    'docs(agent-04): document prompt engineering patterns'
+    'feat(agent-04): add output format customization'
     
     # Agent 05 - Vibe Matcher (47-56)
-    @{type = "feat"; scope = "agent-05"; msg = "initialize vibe matcher fashion agent"; files = @("05 Vibe Matcher/README.md") },
-    @{type = "feat"; scope = "agent-05"; msg = "implement OpenAI embeddings generation"; files = @("05 Vibe Matcher/src/embeddings.py") },
-    @{type = "feat"; scope = "agent-05"; msg = "add cosine similarity search"; files = @("05 Vibe Matcher/src/search.py") },
-    @{type = "feat"; scope = "agent-05"; msg = "create embeddings cache system"; files = @("05 Vibe Matcher/data/embeddings_cache.json") },
-    @{type = "feat"; scope = "agent-05"; msg = "implement Streamlit recommendation UI"; files = @("05 Vibe Matcher/app.py") },
-    @{type = "feat"; scope = "agent-05"; msg = "add fashion style parsing"; files = @("05 Vibe Matcher/vibe_matcher_backend.py") },
-    @{type = "fix"; scope = "agent-05"; msg = "fix embedding dimension mismatch"; files = @("05 Vibe Matcher/src/embeddings.py") },
-    @{type = "docs"; scope = "agent-05"; msg = "add Jupyter notebook walkthrough"; files = @("05 Vibe Matcher/notebooks/vibe_matcher.ipynb") },
-    @{type = "perf"; scope = "agent-05"; msg = "implement batch embedding generation"; files = @("05 Vibe Matcher/src/embeddings.py") },
-    @{type = "refactor"; scope = "agent-05"; msg = "reorganize project into src modules"; files = @("05 Vibe Matcher/src/utils.py") },
+    'feat(agent-05): initialize vibe matcher fashion agent'
+    'feat(agent-05): implement OpenAI embeddings generation'
+    'feat(agent-05): add cosine similarity search'
+    'feat(agent-05): create embeddings cache system'
+    'feat(agent-05): implement Streamlit recommendation UI'
+    'feat(agent-05): add fashion style parsing'
+    'fix(agent-05): fix embedding dimension mismatch'
+    'docs(agent-05): add Jupyter notebook walkthrough'
+    'perf(agent-05): implement batch embedding generation'
+    'refactor(agent-05): reorganize project into src modules'
     
     # Agent 06 - Lead Generation (57-68)
-    @{type = "feat"; scope = "agent-06"; msg = "initialize lead generation agent"; files = @("06 lead_gen_agent/README.md") },
-    @{type = "feat"; scope = "agent-06"; msg = "implement LangGraph workflow"; files = @("06 lead_gen_agent/graph/workflow.py") },
-    @{type = "feat"; scope = "agent-06"; msg = "add Apify web scraper integration"; files = @("06 lead_gen_agent/tools/apify_scraper.py") },
-    @{type = "feat"; scope = "agent-06"; msg = "implement company enrichment tool"; files = @("06 lead_gen_agent/tools/company_enrichment.py") },
-    @{type = "feat"; scope = "agent-06"; msg = "add Google Maps business search"; files = @("06 lead_gen_agent/tools/google_maps.py") },
-    @{type = "feat"; scope = "agent-06"; msg = "implement lead scoring algorithm"; files = @("06 lead_gen_agent/tools/lead_scoring.py") },
-    @{type = "feat"; scope = "agent-06"; msg = "add LinkedIn jobs integration"; files = @("06 lead_gen_agent/tools/linkedin_jobs.py") },
-    @{type = "feat"; scope = "agent-06"; msg = "create lead data models"; files = @("06 lead_gen_agent/models/lead_models.py") },
-    @{type = "feat"; scope = "agent-06"; msg = "implement CLI interface"; files = @("06 lead_gen_agent/cli/main.py") },
-    @{type = "test"; scope = "agent-06"; msg = "add workflow integration tests"; files = @("06 lead_gen_agent/test_workflow.py") },
-    @{type = "docs"; scope = "agent-06"; msg = "document API and configuration"; files = @("06 lead_gen_agent/README.md") },
-    @{type = "fix"; scope = "agent-06"; msg = "fix rate limiting for external APIs"; files = @("06 lead_gen_agent/tools/apify_scraper.py") },
+    'feat(agent-06): initialize lead generation agent'
+    'feat(agent-06): implement LangGraph workflow'
+    'feat(agent-06): add Apify web scraper integration'
+    'feat(agent-06): implement company enrichment tool'
+    'feat(agent-06): add Google Maps business search'
+    'feat(agent-06): implement lead scoring algorithm'
+    'feat(agent-06): add LinkedIn jobs integration'
+    'feat(agent-06): create lead data models'
+    'feat(agent-06): implement CLI interface'
+    'test(agent-06): add workflow integration tests'
+    'docs(agent-06): document API and configuration'
+    'fix(agent-06): fix rate limiting for external APIs'
     
     # Agent 07 - Instagram DM Bot (69-78)
-    @{type = "feat"; scope = "agent-07"; msg = "initialize Instagram DM bot project"; files = @("07 AI-Powered-Instagram-DM-Bot/README.md") },
-    @{type = "feat"; scope = "agent-07"; msg = "implement Instagram login handler"; files = @("07 AI-Powered-Instagram-DM-Bot/wezaxy/login.py") },
-    @{type = "feat"; scope = "agent-07"; msg = "add GPT-4o-mini conversation AI"; files = @("07 AI-Powered-Instagram-DM-Bot/wezaxy/ai.py") },
-    @{type = "feat"; scope = "agent-07"; msg = "implement DM listening service"; files = @("07 AI-Powered-Instagram-DM-Bot/main.py") },
-    @{type = "feat"; scope = "agent-07"; msg = "add proxy rotation support"; files = @("07 AI-Powered-Instagram-DM-Bot/proxies.txt") },
-    @{type = "feat"; scope = "agent-07"; msg = "create config management system"; files = @("07 AI-Powered-Instagram-DM-Bot/config.json") },
-    @{type = "fix"; scope = "agent-07"; msg = "fix session persistence issues"; files = @("07 AI-Powered-Instagram-DM-Bot/wezaxy/login.py") },
-    @{type = "security"; scope = "agent-07"; msg = "add credential encryption"; files = @("07 AI-Powered-Instagram-DM-Bot/wezaxy/Authorization.json") },
-    @{type = "docs"; scope = "agent-07"; msg = "add setup and usage documentation"; files = @("07 AI-Powered-Instagram-DM-Bot/README.md") },
-    @{type = "feat"; scope = "agent-07"; msg = "implement human-like typing delays"; files = @("07 AI-Powered-Instagram-DM-Bot/main.py") },
+    'feat(agent-07): initialize Instagram DM bot project'
+    'feat(agent-07): implement Instagram login handler'
+    'feat(agent-07): add GPT-4o-mini conversation AI'
+    'feat(agent-07): implement DM listening service'
+    'feat(agent-07): add proxy rotation support'
+    'feat(agent-07): create config management system'
+    'fix(agent-07): fix session persistence issues'
+    'security(agent-07): add credential encryption'
+    'docs(agent-07): add setup and usage documentation'
+    'feat(agent-07): implement human-like typing delays'
     
     # Agent 08 - AutoGen Web Info (79-90)
-    @{type = "feat"; scope = "agent-08"; msg = "initialize AutoGen web info agent"; files = @("08_AutoGen_Web_Info_Agent/README.md") },
-    @{type = "feat"; scope = "agent-08"; msg = "implement AutoGen multi-agent system"; files = @("08_AutoGen_Web_Info_Agent/backend.py") },
-    @{type = "feat"; scope = "agent-08"; msg = "add web research agent"; files = @("08_AutoGen_Web_Info_Agent/backend.py") },
-    @{type = "feat"; scope = "agent-08"; msg = "implement stock analysis agent"; files = @("08_AutoGen_Web_Info_Agent/backend.py") },
-    @{type = "feat"; scope = "agent-08"; msg = "add academic paper analyzer"; files = @("08_AutoGen_Web_Info_Agent/backend.py") },
-    @{type = "feat"; scope = "agent-08"; msg = "create Streamlit dashboard"; files = @("08_AutoGen_Web_Info_Agent/app.py") },
-    @{type = "feat"; scope = "agent-08"; msg = "implement agent configuration"; files = @("08_AutoGen_Web_Info_Agent/config.py") },
-    @{type = "feat"; scope = "agent-08"; msg = "add utility functions"; files = @("08_AutoGen_Web_Info_Agent/utils.py") },
-    @{type = "docs"; scope = "agent-08"; msg = "create user guide"; files = @("08_AutoGen_Web_Info_Agent/USER_GUIDE.md") },
-    @{type = "docs"; scope = "agent-08"; msg = "document architecture"; files = @("08_AutoGen_Web_Info_Agent/ARCHITECTURE.md") },
-    @{type = "feat"; scope = "agent-08"; msg = "add quickstart script"; files = @("08_AutoGen_Web_Info_Agent/quickstart.py") },
-    @{type = "docs"; scope = "agent-08"; msg = "create improvements roadmap"; files = @("08_AutoGen_Web_Info_Agent/IMPROVEMENTS.md") },
+    'feat(agent-08): initialize AutoGen web info agent'
+    'feat(agent-08): implement AutoGen multi-agent system'
+    'feat(agent-08): add web research agent'
+    'feat(agent-08): implement stock analysis agent'
+    'feat(agent-08): add academic paper analyzer'
+    'feat(agent-08): create Streamlit dashboard'
+    'feat(agent-08): implement agent configuration'
+    'feat(agent-08): add utility functions'
+    'docs(agent-08): create user guide'
+    'docs(agent-08): document architecture'
+    'feat(agent-08): add quickstart script'
+    'docs(agent-08): create improvements roadmap'
     
     # Agent 09 - AI Co-Browser (91-105)
-    @{type = "feat"; scope = "agent-09"; msg = "initialize AI Co-Browser project"; files = @("AI-Co-Browser-main/README.md") },
-    @{type = "feat"; scope = "agent-09"; msg = "setup Vite React frontend"; files = @("AI-Co-Browser-main/client/src/main.tsx") },
-    @{type = "feat"; scope = "agent-09"; msg = "implement Express backend server"; files = @("AI-Co-Browser-main/server/index.ts") },
-    @{type = "feat"; scope = "agent-09"; msg = "add PostgreSQL database layer"; files = @("AI-Co-Browser-main/server/db.ts") },
-    @{type = "feat"; scope = "agent-09"; msg = "implement Drizzle ORM storage"; files = @("AI-Co-Browser-main/server/storage.ts") },
-    @{type = "feat"; scope = "agent-09"; msg = "create shared schema definitions"; files = @("AI-Co-Browser-main/shared/schema.ts") },
-    @{type = "feat"; scope = "agent-09"; msg = "add chat widget component"; files = @("AI-Co-Browser-main/client/src/components/ChatWidget.tsx") },
-    @{type = "feat"; scope = "agent-09"; msg = "implement OpenAI function calling"; files = @("AI-Co-Browser-main/api/chat.ts") },
-    @{type = "feat"; scope = "agent-09"; msg = "add co-browsing navigation tools"; files = @("AI-Co-Browser-main/api/chat.ts") },
-    @{type = "feat"; scope = "agent-09"; msg = "implement element highlighting"; files = @("AI-Co-Browser-main/client/src/components/ChatWidget.tsx") },
-    @{type = "feat"; scope = "agent-09"; msg = "create portfolio data API"; files = @("AI-Co-Browser-main/api/portfolio.ts") },
-    @{type = "feat"; scope = "agent-09"; msg = "add TailwindCSS styling"; files = @("AI-Co-Browser-main/client/src/index.css") },
-    @{type = "feat"; scope = "agent-09"; msg = "implement shadcn/ui components"; files = @("AI-Co-Browser-main/client/src/components/ui") },
-    @{type = "chore"; scope = "agent-09"; msg = "add VS Code debug configuration"; files = @("AI-Co-Browser-main/.vscode/launch.json") },
-    @{type = "docs"; scope = "agent-09"; msg = "comprehensive setup documentation"; files = @("AI-Co-Browser-main/README.md") },
+    'feat(agent-09): initialize AI Co-Browser project'
+    'feat(agent-09): setup Vite React frontend'
+    'feat(agent-09): implement Express backend server'
+    'feat(agent-09): add PostgreSQL database layer'
+    'feat(agent-09): implement Drizzle ORM storage'
+    'feat(agent-09): create shared schema definitions'
+    'feat(agent-09): add chat widget component'
+    'feat(agent-09): implement OpenAI function calling'
+    'feat(agent-09): add co-browsing navigation tools'
+    'feat(agent-09): implement element highlighting'
+    'feat(agent-09): create portfolio data API'
+    'feat(agent-09): add TailwindCSS styling'
+    'feat(agent-09): implement shadcn-ui components'
+    'chore(agent-09): add VS Code debug configuration'
+    'docs(agent-09): comprehensive setup documentation'
     
     # Agent 10 - OpenClaw (106-120)
-    @{type = "feat"; scope = "agent-10"; msg = "initialize OpenClaw Slack AI bot"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/README.md") },
-    @{type = "feat"; scope = "agent-10"; msg = "implement Slack Bolt.js integration"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/channels/slack.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "create core agent logic"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/agents/agent.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "implement RAG vector store"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/rag/vectorstore.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "add OpenAI embeddings"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/rag/embeddings.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "implement message indexer"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/rag/indexer.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "add semantic retriever"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/rag/retriever.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "implement mem0 memory client"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/memory-ai/mem0-client.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "add MCP tool integration"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/mcp/client.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "implement tool converter for MCP"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/mcp/tool-converter.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "add scheduler tool"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/tools/scheduler.ts") },
-    @{type = "feat"; scope = "agent-10"; msg = "implement Slack action tools"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/src/tools/slack-actions.ts") },
-    @{type = "docs"; scope = "agent-10"; msg = "document architecture design"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/docs/ARCHITECTURE.md") },
-    @{type = "docs"; scope = "agent-10"; msg = "add RAG pipeline documentation"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/docs/RAG.md") },
-    @{type = "docs"; scope = "agent-10"; msg = "document memory system"; files = @("OpenClaw-From-Scratch-main/OpenClaw-From-Scratch-main/docs/MEMORY.md") }
+    'feat(agent-10): initialize OpenClaw Slack AI bot'
+    'feat(agent-10): implement Slack Bolt.js integration'
+    'feat(agent-10): create core agent logic'
+    'feat(agent-10): implement RAG vector store'
+    'feat(agent-10): add OpenAI embeddings'
+    'feat(agent-10): implement message indexer'
+    'feat(agent-10): add semantic retriever'
+    'feat(agent-10): implement mem0 memory client'
+    'feat(agent-10): add MCP tool integration'
+    'feat(agent-10): implement tool converter for MCP'
+    'feat(agent-10): add scheduler tool'
+    'feat(agent-10): implement Slack action tools'
+    'docs(agent-10): document architecture design'
+    'docs(agent-10): add RAG pipeline documentation'
+    'docs(agent-10): document memory system'
 )
 
-Write-Host "📊 Preparing to generate $($commitMessages.Count) commits..." -ForegroundColor Yellow
+Write-Host "Preparing to generate $($commitMessages.Count) commits..." -ForegroundColor Yellow
 Write-Host ""
 
 if ($DryRun) {
-    Write-Host "🔍 DRY RUN MODE - No commits will be made" -ForegroundColor Magenta
+    Write-Host "DRY RUN MODE - No commits will be made" -ForegroundColor Magenta
     Write-Host ""
 }
 
 $counter = 0
-foreach ($commit in $commitMessages) {
+foreach ($commitMsg in $commitMessages) {
     $counter++
-    $fullMessage = "$($commit.type)($($commit.scope)): $($commit.msg)"
     
     Write-Host "[$counter/$($commitMessages.Count)] " -ForegroundColor Cyan -NoNewline
-    Write-Host "$fullMessage" -ForegroundColor White
+    Write-Host "$commitMsg" -ForegroundColor White
     
     if (-not $DryRun) {
-        # Stage specific files if they exist, otherwise create dummy change
-        foreach ($file in $commit.files) {
-            if (Test-Path $file) {
-                git add $file 2>$null
-            }
-        }
-        
         # Create a minor change to ensure commit works
         $historyFile = ".git/COMMIT_HISTORY.log"
-        Add-Content -Path $historyFile -Value "[$counter] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - $fullMessage"
+        $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+        Add-Content -Path $historyFile -Value "[$counter] $timestamp - $commitMsg"
         git add $historyFile 2>$null
         
         # Make the commit
-        git commit -m $fullMessage --allow-empty 2>$null
+        git commit -m $commitMsg --allow-empty 2>$null
         
         # Small delay to ensure unique timestamps
-        Start-Sleep -Milliseconds 100
+        Start-Sleep -Milliseconds 50
     }
 }
 
 Write-Host ""
-Write-Host "╔══════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║   ✅ Commit generation complete!                        ║" -ForegroundColor Green
-Write-Host "╚══════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host "   Commit generation complete!                              " -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
 
 if (-not $DryRun) {
-    Write-Host "📈 Final Statistics:" -ForegroundColor Cyan
+    Write-Host "Final Statistics:" -ForegroundColor Cyan
     $commitCount = (git rev-list --count HEAD)
     Write-Host "   Total commits: $commitCount" -ForegroundColor White
     Write-Host ""
-    Write-Host "🚀 Next Steps:" -ForegroundColor Yellow
+    Write-Host "Next Steps:" -ForegroundColor Yellow
     Write-Host "   1. Review commits: git log --oneline -20" -ForegroundColor White
     Write-Host "   2. Push to remote: git push origin main" -ForegroundColor White
 }
 
 Write-Host ""
-Write-Host "Thank you for using the commit generator! 🎉" -ForegroundColor Magenta
+Write-Host "Thank you for using the commit generator!" -ForegroundColor Magenta
