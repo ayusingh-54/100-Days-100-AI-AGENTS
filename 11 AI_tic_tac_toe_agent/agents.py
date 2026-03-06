@@ -28,8 +28,6 @@ from typing import Tuple
 
 from agno.agent import Agent
 from agno.models.anthropic import Claude
-from agno.models.google import Gemini
-from agno.models.groq import Groq
 from agno.models.openai import OpenAIChat
 
 project_root = str(Path(__file__).parent.parent.parent.parent)
@@ -42,7 +40,7 @@ def get_model_for_provider(provider: str, model_name: str):
     Creates and returns the appropriate model instance based on the provider.
 
     Args:
-        provider: The model provider (e.g., 'openai', 'google', 'anthropic', 'groq')
+        provider: The model provider ('openai' or 'anthropic')
         model_name: The specific model name/ID
 
     Returns:
@@ -53,8 +51,6 @@ def get_model_for_provider(provider: str, model_name: str):
     """
     if provider == "openai":
         return OpenAIChat(id=model_name)
-    elif provider == "google":
-        return Gemini(id=model_name)
     elif provider == "anthropic":
         if model_name == "claude-3-5-sonnet":
             return Claude(id="claude-3-5-sonnet-20241022", max_tokens=8192)
@@ -71,10 +67,8 @@ def get_model_for_provider(provider: str, model_name: str):
             )
         else:
             return Claude(id=model_name)
-    elif provider == "groq":
-        return Groq(id=model_name)
     else:
-        raise ValueError(f"Unsupported model provider: {provider}")
+        raise ValueError(f"Unsupported model provider: {provider}. Use 'openai' or 'anthropic'.")
 
 
 def get_tic_tac_toe_players(

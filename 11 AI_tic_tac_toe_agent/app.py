@@ -2,6 +2,9 @@ import nest_asyncio
 import streamlit as st
 from dotenv import load_dotenv
 import os
+import random
+import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 # Load environment variables from .env file
 load_dotenv()
@@ -18,6 +21,58 @@ from utils import (
 )
 
 nest_asyncio.apply()
+
+# Constants for robustness
+AI_TIMEOUT_SECONDS = 30  # Maximum time to wait for AI response
+MAX_RETRIES = 2  # Number of retries before fallback
+
+
+def get_ai_move_with_timeout(agent, prompt, timeout=AI_TIMEOUT_SECONDS):
+    """
+    Get AI move with timeout protection.
+    Returns the response content or None if timeout/error.
+    """
+    def make_move():
+        return agent.run(prompt, stream=False)
+    
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(make_move)
+        try:
+            response = future.result(timeout=timeout)
+            return response
+        except FuturesTimeoutError:
+            logger.error(f"AI response timed out after {timeout} seconds")
+            return None
+        except Exception as e:
+            logger.error(f"AI error: {str(e)}")
+            return None
+
+
+def parse_move_from_response(response_content, valid_moves):
+    """
+    Parse row, col from AI response. Returns (row, col) or None if parsing fails.
+    """
+    if not response_content:
+        return None
+    
+    try:
+        numbers = re.findall(r"\d+", response_content)
+        if len(numbers) >= 2:
+            row, col = int(numbers[0]), int(numbers[1])
+            if (row, col) in valid_moves:
+                return (row, col)
+    except (ValueError, IndexError):
+        pass
+    return None
+
+
+def get_random_move(valid_moves):
+    """
+    Fallback: pick a random valid move.
+    """
+    if valid_moves:
+        return random.choice(valid_moves)
+    return None
 
 # Page configuration
 st.set_page_config(
@@ -41,9 +96,6 @@ def main():
         "claude-3.5": "ANTHROPIC_API_KEY",
         "claude-3.7": "ANTHROPIC_API_KEY",
         "claude-3.7-thinking": "ANTHROPIC_API_KEY",
-        "gemini-flash": "GOOGLE_API_KEY",
-        "gemini-pro": "GOOGLE_API_KEY",
-        "llama-3.3": "GROQ_API_KEY",
     }
     
     ####################################################################
@@ -70,9 +122,6 @@ def main():
             "claude-3.5": "anthropic:claude-3-5-sonnet",
             "claude-3.7": "anthropic:claude-3-7-sonnet",
             "claude-3.7-thinking": "anthropic:claude-3-7-sonnet-thinking",
-            "gemini-flash": "google:gemini-2.0-flash",
-            "gemini-pro": "google:gemini-2.0-pro-exp-02-05",
-            "llama-3.3": "groq:llama-3.3-70b-versatile",
         }
         ################################################################
         # Model selection
@@ -110,9 +159,7 @@ def main():
             2. Add your API keys:
             ```
             OPENAI_API_KEY=your_key_here
-            ANTHROPIC_API_KEY=your_key_here  
-            GOOGLE_API_KEY=your_key_here
-            GROQ_API_KEY=your_key_here
+            ANTHROPIC_API_KEY=your_key_here
             ```
             3. Restart the app
             """)
@@ -219,34 +266,72 @@ def main():
                 if current_player == "X"
                 else st.session_state.player_o
             )
-            response: RunOutput = current_agent.run(
-                f"""\
-Current board state:\n{st.session_state.game_board.get_board_state()}\n
-Available valid moves (row, col): {valid_moves}\n
+            
+            prompt = f"""Current board state:
+{st.session_state.game_board.get_board_state()}
+
+Available valid moves (row, col): {valid_moves}
+
 Choose your next move from the valid moves above.
-Respond with ONLY two numbers for row and column, e.g. "1 2".""",
-                stream=False,
-            )
+Respond with ONLY two numbers for row and column, e.g. "1 2"."""
 
-            try:
-                import re
+            # Try to get AI move with retries and timeout
+            move = None
+            used_fallback = False
+            
+            for attempt in range(MAX_RETRIES + 1):
+                try:
+                    response = get_ai_move_with_timeout(current_agent, prompt)
+                    
+                    if response and response.content:
+                        move = parse_move_from_response(response.content, valid_moves)
+                        if move:
+                            break
+                        else:
+                            logger.warning(f"Attempt {attempt + 1}: Could not parse valid move from response: {response.content[:100]}")
+                    else:
+                        logger.warning(f"Attempt {attempt + 1}: No response from AI")
+                        
+                except Exception as e:
+                    logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
+                
+                # Update prompt for retry
+                if attempt < MAX_RETRIES:
+                    prompt = f"""IMPORTANT: Your previous response was invalid.
 
-                numbers = re.findall(r"\d+", response.content if response else "")
-                row, col = map(int, numbers[:2])
+Current board state:
+{st.session_state.game_board.get_board_state()}
+
+VALID MOVES (you MUST choose one): {valid_moves}
+
+Respond with EXACTLY two numbers separated by space. Example: "1 2"
+Do NOT include any other text."""
+            
+            # Fallback to random move if AI failed
+            if not move:
+                move = get_random_move(valid_moves)
+                used_fallback = True
+                if move:
+                    logger.warning(f"Using random fallback move: {move}")
+                    st.warning(f"⚠️ AI timed out - using random move")
+            
+            if move:
+                row, col = move
                 success, message = st.session_state.game_board.make_move(row, col)
 
                 if success:
                     move_number = len(st.session_state.move_history) + 1
+                    move_note = " (random)" if used_fallback else ""
                     st.session_state.move_history.append(
                         {
                             "number": move_number,
-                            "player": f"Player {player_num} ({current_model_name})",
+                            "player": f"Player {player_num} ({current_model_name}){move_note}",
                             "move": f"{row},{col}",
                         }
                     )
 
                     logger.info(
-                        f"Move {move_number}: Player {player_num} ({current_model_name}) placed at position ({row}, {col})"
+                        f"Move {move_number}: Player {player_num} ({current_model_name}) placed at position ({row}, {col}){move_note}"
                     )
                     logger.info(
                         f"Board state:\n{st.session_state.game_board.get_board_state()}"
@@ -264,21 +349,11 @@ Respond with ONLY two numbers for row and column, e.g. "1 2".""",
                     st.rerun()
                 else:
                     logger.error(f"Invalid move attempt: {message}")
-                    response: RunOutput = current_agent.run(
-                        f"""\
-Invalid move: {message}
-
-Current board state:\n{st.session_state.game_board.get_board_state()}\n
-Available valid moves (row, col): {valid_moves}\n
-Please choose a valid move from the list above.
-Respond with ONLY two numbers for row and column, e.g. "1 2".""",
-                        stream=False,
-                    )
+                    st.error(f"Move failed: {message}")
                     st.rerun()
-
-            except Exception as e:
-                logger.error(f"Error processing move: {str(e)}")
-                st.error(f"Error processing move: {str(e)}")
+            else:
+                st.error("No valid moves available - game may be stuck")
+                st.session_state.game_paused = True
                 st.rerun()
     else:
         st.info("👈 Press 'Start Game' to begin!")
