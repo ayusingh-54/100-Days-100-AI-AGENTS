@@ -1,115 +1,183 @@
-# 🎮 Agent X vs Agent O: Tic-Tac-Toe Game
+# 🎮 AI Tic Tac Toe Agent Battle
 
-An interactive Tic-Tac-Toe game where two AI agents powered by different language models compete against each other built on Agno Agent Framework and Streamlit as UI.
+Watch AI agents powered by GPT-4o and Claude battle it out in real-time Tic Tac Toe games!
 
-This example shows how to build an interactive Tic Tac Toe game where AI agents compete against each other. The application showcases how to:
-- Coordinate multiple AI agents in a turn-based game
-- Use different language models for different players
-- Create an interactive web interface with Streamlit
-- Handle game state and move validation
-- Display real-time game progress and move history
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.0+-red.svg)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o-green.svg)
+![Anthropic](https://img.shields.io/badge/Anthropic-Claude--3.7-purple.svg)
 
-## Features
-- Multiple AI models support (GPT-4, Claude, Gemini, etc.)
-- Real-time game visualization
-- Move history tracking with board states
-- Interactive player selection
-- Game state management
-- Move validation and coordination
+## 🌟 Features
 
-## How to Run? 
+- **Real-time AI vs AI battles** - Watch two AI models compete against each other
+- **Multiple AI Models** - Choose from GPT-4o, o3-mini, Claude-3.5, Claude-3.7, and Claude-3.7-thinking
+- **Strategic Personalities** - Each game randomly assigns different strategies to players:
+  - 🔥 **Aggressive** - Attack-focused gameplay
+  - 🛡️ **Defensive** - Blocking-focused strategy
+  - 🎯 **Center Control** - Dominates the center position
+  - 📐 **Corner Master** - Prioritizes corner positions
+  - 🎲 **Unpredictable** - Mixed strategy gameplay
+  - 🔀 **Fork Creator** - Sets up double winning paths
+- **Robust Error Handling** - 30-second timeout with automatic retry and random move fallback
+- **Beautiful Dark Mode UI** - Modern Streamlit interface with real-time updates
+- **Game History** - Track all moves made during the game
 
-1. **Setup Environment**
+## 📋 Prerequisites
+
+- Python 3.8 or higher
+- OpenAI API key (for GPT-4o, o3-mini)
+- Anthropic API key (for Claude models)
+
+## 🚀 Installation
+
+1. **Clone or navigate to the project directory:**
+
    ```bash
-   # Clone the repository
-   git clone https://github.com/Shubhamsaboo/awesome-llm-apps.git
-   cd advanced_ai_agents/autonomous_game_playing_agent_apps/ai_tic_tac_toe_agent
-
-   # Install dependencies
-   pip install -r requirements.txt
+   cd "11 AI_tic_tac_toe_agent"
    ```
 
-### 2. Install dependencies
+2. **Create a virtual environment:**
 
-```shell
-pip install -r requirements.txt
-```
-
-### 3. Setup API Keys
-
-The game supports multiple AI models. Create a `.env` file in this directory and add your API keys:
-
-1. **Create a `.env` file:**
    ```bash
-   # In the ai_tic_tac_toe_agent directory
-   touch .env
+   python -m venv venv
    ```
 
-2. **Add your API keys to the `.env` file:**
+3. **Activate the virtual environment:**
+
+   Windows:
+
+   ```bash
+   .\venv\Scripts\activate
+   ```
+
+   macOS/Linux:
+
+   ```bash
+   source venv/bin/activate
+   ```
+
+4. **Install dependencies:**
+
+   ```bash
+   pip install streamlit agno openai anthropic python-dotenv nest-asyncio
+   ```
+
+5. **Create a `.env` file** in the project root with your API keys:
    ```env
-   # Required for OpenAI models (gpt-4o, o3-mini)
-   OPENAI_API_KEY=your_actual_openai_api_key_here
-
-   # Optional - for additional models
-   ANTHROPIC_API_KEY=your_actual_anthropic_api_key_here  # For Claude models
-   GOOGLE_API_KEY=your_actual_google_api_key_here        # For Gemini models
-   GROQ_API_KEY=your_actual_groq_api_key_here           # For Groq models
+   OPENAI_API_KEY=your_openai_api_key_here
+   ANTHROPIC_API_KEY=your_anthropic_api_key_here
    ```
 
-   > **Note:** Replace the placeholder values with your actual API keys. The app will show helpful error messages if required keys are missing.
+## 🎯 Usage
 
-### 4. Run the Game
+1. **Run the Streamlit app:**
 
-```shell
-streamlit run app.py
+   ```bash
+   streamlit run app.py
+   ```
+
+2. **Open your browser** to `http://localhost:8501`
+
+3. **Select AI models** for Player X and Player O from the sidebar
+
+4. **Click "Start Game"** and watch the AI battle!
+
+## 🏗️ Project Structure
+
+```
+11 AI_tic_tac_toe_agent/
+├── app.py              # Main Streamlit application
+├── agents.py           # AI agent configurations and strategies
+├── utils.py            # Game board logic and UI utilities
+├── requirements.txt    # Python dependencies
+├── .env                # API keys (create this file)
+└── README.md           # This file
 ```
 
-- Open [localhost:8501](http://localhost:8501) to view the game interface
+## 📁 File Descriptions
 
-## How It Works
+### `app.py`
 
-The game consists of three agents:
+The main Streamlit application that handles:
 
-1. **Master Agent (Referee)**
-   - Coordinates the game
-   - Validates moves
-   - Maintains game state
-   - Determines game outcome
+- Game UI and controls
+- Model selection interface
+- Move execution with timeout protection
+- Game state management
+- Retry logic with random move fallback
 
-2. **Two Player Agents**
-   - Make strategic moves
-   - Analyze board state
-   - Follow game rules
-   - Respond to opponent moves
+### `agents.py`
 
-## Available Models
+Defines AI player agents with:
 
-The game supports various AI models:
-- GPT-4o (OpenAI)
-- GPT-o3-mini (OpenAI)
-- Gemini (Google)
-- Llama 3 (Groq)
-- Claude (Anthropic)
+- Model provider integration (OpenAI, Anthropic)
+- Strategic personalities for varied gameplay
+- Temperature randomization for move variety
+- Detailed game prompts for strategic thinking
 
-## Game Features
+### `utils.py`
 
-1. **Interactive Board**
-   - Real-time updates
-   - Visual move tracking
-   - Clear game status display
+Contains game utilities:
 
-2. **Move History**
-   - Detailed move tracking
-   - Board state visualization
-   - Player action timeline
+- `TicTacToeBoard` class for game state
+- Move validation and winner detection
+- Board display functions
+- Custom CSS styling
 
-3. **Game Controls**
-   - Start/Pause game
-   - Reset board
-   - Select AI models
-   - View game history
+## ⚙️ Configuration
 
-4. **Performance Analysis**
-   - Move timing
-   - Strategy tracking
-   - Game statistics
+### Available Models
+
+| Model                 | Provider  | Description                       |
+| --------------------- | --------- | --------------------------------- |
+| `gpt-4o`              | OpenAI    | GPT-4o - Fast and capable         |
+| `o3-mini`             | OpenAI    | o3-mini - Reasoning model         |
+| `claude-3.5`          | Anthropic | Claude 3.5 Sonnet                 |
+| `claude-3.7`          | Anthropic | Claude 3.7 Sonnet                 |
+| `claude-3.7-thinking` | Anthropic | Claude 3.7 with extended thinking |
+
+### Timeout Settings
+
+Edit `app.py` to adjust:
+
+```python
+AI_TIMEOUT_SECONDS = 30  # Maximum wait time for AI response
+MAX_RETRIES = 2          # Retry attempts before fallback
+```
+
+## 🔧 Troubleshooting
+
+### "Missing API Keys" Error
+
+- Ensure `.env` file exists with correct API keys
+- Restart the Streamlit app after adding keys
+
+### AI Takes Too Long
+
+- The app has a 30-second timeout with automatic fallback
+- If timeout occurs, a random valid move is made
+- Check your internet connection
+
+### Game Gets Stuck
+
+- Click "New Game" to reset
+- Check terminal for error logs
+
+## 🛠️ Built With
+
+- [Streamlit](https://streamlit.io/) - Web application framework
+- [Agno](https://github.com/agno-ai/agno) - AI agent framework
+- [OpenAI API](https://openai.com/) - GPT models
+- [Anthropic API](https://anthropic.com/) - Claude models
+
+## 📝 License
+
+This project is part of the 100-Days-100-AI-AGENTS challenge.
+
+## 🤝 Contributing
+
+Feel free to submit issues and enhancement requests!
+
+---
+
+**Happy Gaming! 🎮**

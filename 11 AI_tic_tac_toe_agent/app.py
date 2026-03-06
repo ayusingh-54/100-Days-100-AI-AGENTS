@@ -267,13 +267,46 @@ def main():
                 else st.session_state.player_o
             )
             
-            prompt = f"""Current board state:
+            # Get move number for context
+            move_num = len(st.session_state.move_history) + 1
+            opponent = "O" if current_player == "X" else "X"
+            
+            # Add strategic hints based on game state
+            strategic_hint = ""
+            if move_num == 1:
+                hints = [
+                    "Opening move! Consider the center (1 1) or a corner (0 0, 0 2, 2 0, 2 2).",
+                    "First move! Corners and center are strategic positions.",
+                    "You go first! Surprise your opponent with an unexpected opening."
+                ]
+                strategic_hint = random.choice(hints)
+            elif move_num <= 3:
+                strategic_hint = "Early game - establish your position and watch for opponent's strategy."
+            else:
+                strategic_hint = "Mid/late game - look for winning moves or block opponent's threats!"
+            
+            # Get last opponent move for context
+            last_move_info = ""
+            if st.session_state.move_history:
+                last = st.session_state.move_history[-1]
+                last_move_info = f"\\nOpponent's last move: {last['move']}"
+            
+            prompt = f"""MOVE #{move_num} - You are {current_player}
+{strategic_hint}
+
+CURRENT BOARD:
 {st.session_state.game_board.get_board_state()}
+{last_move_info}
 
-Available valid moves (row, col): {valid_moves}
+YOUR VALID MOVES: {valid_moves}
 
-Choose your next move from the valid moves above.
-Respond with ONLY two numbers for row and column, e.g. "1 2"."""
+PRIORITIES:
+1. WIN if you can get 3 in a row!
+2. BLOCK if {opponent} is about to win!
+3. CREATE a fork (two winning paths)!
+4. STRATEGIC positioning!
+
+YOUR MOVE (row col only, e.g. "1 1"):"""
 
             # Try to get AI move with retries and timeout
             move = None
