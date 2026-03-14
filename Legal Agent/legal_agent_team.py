@@ -345,7 +345,7 @@ def main():
     with hcol2:
         if st.session_state.legal_team:
             st.success("System ready")
-        elif st.session_state.vector_db:
+        elif st.session_state.openai_api_key:
             st.info("Awaiting document")
         else:
             st.warning("Setup required")
