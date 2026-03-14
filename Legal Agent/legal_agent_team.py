@@ -410,12 +410,17 @@ Choose an analysis type, jurisdiction, and click **Analyze Document**.
             else ""
         )
         base = cfg["query"] if analysis_type != "Custom Query" else user_query
+        doc_text = st.session_state.document_text[:MAX_PROMPT_CHARS]
         full_query = (
-            f"Using the uploaded legal document as the primary reference:\n\n"
-            f"{base}"
+            f"DOCUMENT TO ANALYZE:\n"
+            f"{'─' * 60}\n"
+            f"{doc_text}\n"
+            f"{'─' * 60}\n\n"
+            f"ANALYSIS TASK: {base}"
             f"{jnote}\n\n"
             f"Agents assigned: {', '.join(cfg['agents'])}\n"
-            f"Search the knowledge base and cite specific sections of the document."
+            f"Base your entire response on the document text provided above. "
+            f"Cite specific clauses, sections, or paragraph numbers where relevant."
         )
 
         record: dict = {
