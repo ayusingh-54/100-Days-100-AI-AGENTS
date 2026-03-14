@@ -351,30 +351,22 @@ def main():
             st.warning("Setup required")
 
     # ── Onboarding ────────────────────────────────────────────────────────────
-    if not st.session_state.vector_db:
-        st.info("Configure your API credentials in the sidebar to begin.")
+    if not st.session_state.openai_api_key:
+        st.info("Enter your OpenAI API key in the sidebar to begin.")
         with st.expander("How to get started"):
             st.markdown(
                 """
 **Step 1 — OpenAI API Key**
 Get yours from [platform.openai.com](https://platform.openai.com/account/api-keys).
-
-**Step 2 — Choose storage mode**
-
-- **Local (recommended for quick start)** — select *Local (no cloud needed)* in the sidebar. No Qdrant account required. Documents are stored on disk in `./qdrant_local_db/`.
-- **Qdrant Cloud** — create a free cluster at [cloud.qdrant.io](https://cloud.qdrant.io). Use the **full-access API key** (not the read-only key).
-
-**Step 3 — (Optional) .env file**
+Add it to a `.env` file for automatic loading:
 ```
 OPENAI_API_KEY=sk-...
-QDRANT_API_KEY=...      # only needed for Cloud mode
-QDRANT_URL=https://....qdrant.io   # only needed for Cloud mode
 ```
 
-**Step 4 — Upload a document**
+**Step 2 — Upload a document**
 PDF or plain-text, up to 10 MB.
 
-**Step 5 — Analyze**
+**Step 3 — Analyze**
 Choose an analysis type, jurisdiction, and click **Analyze Document**.
 """
             )
