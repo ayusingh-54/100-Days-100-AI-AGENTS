@@ -8,52 +8,64 @@ A Streamlit application that simulates a full-service legal team using multiple 
 ## Features
 
 - **Specialized Legal AI Agent Team**
-  - **Legal Researcher**: Equipped with DuckDuckGo search tool to find and cite relevant legal cases and precedents. Provides detailed research summaries with sources and references specific sections from uploaded documents.
-  
-  - **Contract Analyst**: Specializes in thorough contract review, identifying key terms, obligations, and potential issues. References specific clauses from documents for detailed analysis.
-  
-  - **Legal Strategist**: Focuses on developing comprehensive legal strategies, providing actionable recommendations while considering both risks and opportunities.
-  
-  - **Team Lead**: Coordinates analysis between team members, ensures comprehensive responses, properly sourced recommendations, and references to specific document parts. Acts as an Agent Team coordinator for all three agents.
+  - **Legal Researcher**: DuckDuckGo-powered research to find and cite relevant cases, statutes, and precedents with full citations and jurisdiction context.
+  - **Contract Analyst**: Thorough contract review — identifies key terms, obligations, flags ambiguous clauses, and rates each risk as LOW / MEDIUM / HIGH / CRITICAL.
+  - **Legal Strategist**: Prioritized, actionable recommendations including suggested amendments and protective clauses.
+  - **Team Lead**: Coordinates all three agents, synthesises findings into a cohesive report with document citations.
 
-- **Document Analysis Types**
-  - Contract Review - Done by Contract Analyst
-  - Legal Research - Done by Legal Researcher
-  - Risk Assessment - Done by Legal Strategist, Contract Analyst
-  - Compliance Check - Done by Legal Strategist, Legal Researcher, Contract Analyst
-  - Custom Queries - Done by Agent Team - Legal Researcher, Legal Strategist, Contract Analyst
+- **Six Analysis Types**
+  - 📑 Contract Review — key terms, obligations, and risk flags
+  - 🔍 Legal Research — relevant cases, precedents, and applicable statutes
+  - ⚠️ Risk Assessment — severity-rated risks and liabilities
+  - ✅ Compliance Check — regulatory and statutory compliance review
+  - 🔬 Due Diligence — warranties, indemnities, IP, confidentiality, exit provisions
+  - 💭 Custom Query — any bespoke question using the full agent team
+
+- **Quality-of-life enhancements**
+  - Jurisdiction selector (US, UK, EU, Canada, Australia, India, Singapore, International)
+  - Analysis history — previous runs saved in-session with expandable view
+  - Download report — export any analysis as a Markdown file
+  - `.env` auto-loading — no need to paste keys into the UI on every run
+  - File size guard — rejects files over 10 MB with a clear error
+  - Step-by-step progress bar during analysis
 
 ## How to Run
 
-1. **Setup Environment**
+1. **Install dependencies**
    ```bash
-   # Clone the repository
-   git clone https://github.com/Shubhamsaboo/awesome-llm-apps.git
-   cd advanced_ai_agents/multi_agent_apps/agent_teams/ai_legal_agent_team
-   
-   # Install dependencies
    pip install -r requirements.txt
    ```
 
 2. **Configure API Keys**
-   - Get OpenAI API key from [OpenAI Platform](https://platform.openai.com)
-   - Get Qdrant API key and URL from [Qdrant Cloud](https://cloud.qdrant.io)
 
-3. **Run the Application**
+   Option A — add to `.env` (recommended, auto-loaded on startup):
+   ```
+   OPENAI_API_KEY=sk-...
+   QDRANT_API_KEY=...
+   QDRANT_URL=https://....qdrant.io
+   ```
+
+   Option B — enter them directly in the sidebar.
+
+   - OpenAI API key: [platform.openai.com](https://platform.openai.com/account/api-keys)
+   - Qdrant cloud: [cloud.qdrant.io](https://cloud.qdrant.io) (free tier available)
+
+3. **Run**
    ```bash
    streamlit run legal_agent_team.py
    ```
-4. **Use the Interface**
-   - Enter API credentials
-   - Upload a legal document (PDF)
-   - Select analysis type
-   - Add custom queries if needed
-   - View analysis results
+
+4. **Use the app**
+   - Click **Connect to Qdrant** in the sidebar
+   - Upload a legal document (PDF or TXT, max 10 MB)
+   - Choose an analysis type and jurisdiction
+   - Click **Analyze Document**
+   - Download the report with the **⬇ Download Report** button
 
 ## Notes
 
-- Supports PDF documents only
-- Uses GPT-4o for analysis
-- Uses text-embedding-3-small for embeddings
-- Requires stable internet connection
-- API usage costs apply
+- Supported formats: PDF, TXT (max 10 MB)
+- LLM: GPT-4o
+- Embeddings: text-embedding-3-small
+- Requires a stable internet connection
+- OpenAI and Qdrant API usage costs apply

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python -c \"import ddgs; print\\(''ddgs ok''\\)\")",
+      "Bash(\"/d/100-Days-100-AI-AGENTS/.venv/Scripts/python.exe\" -c \"import ddgs; print\\(''ok''\\)\")",
+      "Bash(\"/d/100-Days-100-AI-AGENTS/.venv/Scripts/pip.exe\" show:*)",
+      "Bash(\"/d/100-Days-100-AI-AGENTS/.venv/Scripts/streamlit.exe\" run:*)"
+    ]
+  }
+}

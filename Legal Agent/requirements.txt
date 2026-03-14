@@ -4,3 +4,5 @@ qdrant-client
 openai
 pypdf
 duckduckgo-search
+python-dotenv
+ddgs

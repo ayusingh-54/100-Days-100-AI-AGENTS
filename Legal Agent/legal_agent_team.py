@@ -9,386 +9,606 @@ from agno.models.openai import OpenAIChat
 from agno.knowledge.embedder.openai import OpenAIEmbedder
 import tempfile
 import os
+from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
+
+MAX_FILE_SIZE_MB = 10
+COLLECTION_NAME = "legal_documents"
+
+ANALYSIS_CONFIGS = {
+    "Contract Review": {
+        "query": (
+            "Thoroughly review this contract. Identify all key terms, obligations, rights, "
+            "penalties, termination clauses, and potential legal issues. Flag any ambiguous "
+            "or missing clauses that could create disputes."
+        ),
+        "agents": ["Contract Analyst"],
+        "description": "Detailed contract analysis — terms, obligations, and risk flags",
+        "icon": "📑",
+    },
+    "Legal Research": {
+        "query": (
+            "Research and identify relevant legal cases, precedents, and statutes that apply "
+            "to this document. Provide full citations and explain their relevance to the "
+            "specific provisions of the document."
+        ),
+        "agents": ["Legal Researcher"],
+        "description": "Applicable cases, precedents, and statutes",
+        "icon": "🔍",
+    },
+    "Risk Assessment": {
+        "query": (
+            "Analyze all potential legal risks and liabilities present in this document. "
+            "Rate each risk as LOW, MEDIUM, HIGH, or CRITICAL. Explain the potential "
+            "consequences of each risk and how likely they are to materialize."
+        ),
+        "agents": ["Contract Analyst", "Legal Strategist"],
+        "description": "Comprehensive risk analysis with severity ratings",
+        "icon": "⚠️",
+    },
+    "Compliance Check": {
+        "query": (
+            "Check this document for regulatory compliance issues. Identify any violations "
+            "or potential violations of applicable laws and regulations. Specify the exact "
+            "regulation or statute at issue."
+        ),
+        "agents": ["Legal Researcher", "Contract Analyst", "Legal Strategist"],
+        "description": "Full regulatory and statutory compliance review",
+        "icon": "✅",
+    },
+    "Due Diligence": {
+        "query": (
+            "Perform a comprehensive due diligence review of this document. Examine all "
+            "material terms, representations, warranties, indemnities, limitation of "
+            "liability clauses, IP ownership, confidentiality obligations, and exit provisions."
+        ),
+        "agents": ["Legal Researcher", "Contract Analyst", "Legal Strategist"],
+        "description": "Full due diligence across all material terms and provisions",
+        "icon": "🔬",
+    },
+    "Custom Query": {
+        "query": None,
+        "agents": ["Legal Researcher", "Contract Analyst", "Legal Strategist"],
+        "description": "Custom analysis using the full agent team",
+        "icon": "💭",
+    },
+}
+
+JURISDICTIONS = [
+    "United States",
+    "United Kingdom",
+    "European Union",
+    "Canada",
+    "Australia",
+    "India",
+    "Singapore",
+    "General / International",
+]
+
+
+# ── Session state ─────────────────────────────────────────────────────────────
 
 def init_session_state():
-    """Initialize session state variables"""
-    if 'openai_api_key' not in st.session_state:
-        st.session_state.openai_api_key = None
-    if 'qdrant_api_key' not in st.session_state:
-        st.session_state.qdrant_api_key = None
-    if 'qdrant_url' not in st.session_state:
-        st.session_state.qdrant_url = None
-    if 'vector_db' not in st.session_state:
-        st.session_state.vector_db = None
-    if 'legal_team' not in st.session_state:
-        st.session_state.legal_team = None
-    if 'knowledge_base' not in st.session_state:
-        st.session_state.knowledge_base = None
-    # Add a new state variable to track processed files
-    if 'processed_files' not in st.session_state:
-        st.session_state.processed_files = set()
+    defaults = {
+        "openai_api_key": os.getenv("OPENAI_API_KEY", ""),
+        "qdrant_api_key": os.getenv("QDRANT_API_KEY", ""),
+        "qdrant_url": os.getenv("QDRANT_URL", ""),
+        "vector_db": None,
+        "legal_team": None,
+        "knowledge_base": None,
+        "processed_files": set(),
+        "analysis_history": [],
+        "current_doc_name": None,
+        "current_doc_size_mb": None,
+    }
+    for key, default in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = default
 
-COLLECTION_NAME = "legal_documents"  # Define your collection name
 
-def init_qdrant():
-    """Initialize Qdrant client with configured settings."""
-    if not all([st.session_state.qdrant_api_key, st.session_state.qdrant_url]):
+# ── Qdrant ────────────────────────────────────────────────────────────────────
+
+def init_qdrant() -> Qdrant | None:
+    if not all([
+        st.session_state.qdrant_api_key,
+        st.session_state.qdrant_url,
+        st.session_state.openai_api_key,
+    ]):
         return None
     try:
-        # Create Agno's Qdrant instance which implements VectorDb
         vector_db = Qdrant(
             collection=COLLECTION_NAME,
             url=st.session_state.qdrant_url,
             api_key=st.session_state.qdrant_api_key,
             embedder=OpenAIEmbedder(
-                id="text-embedding-3-small", 
-                api_key=st.session_state.openai_api_key
-            )
+                id="text-embedding-3-small",
+                api_key=st.session_state.openai_api_key,
+            ),
         )
         return vector_db
     except Exception as e:
-        st.error(f"🔴 Qdrant connection failed: {str(e)}")
+        st.error(f"Qdrant connection failed: {e}")
         return None
 
-def process_document(uploaded_file, vector_db: Qdrant):
-    """
-    Process document, create embeddings and store in Qdrant vector database
-    
-    Args:
-        uploaded_file: Streamlit uploaded file object
-        vector_db (Qdrant): Initialized Qdrant instance from Agno
-    
-    Returns:
-        Knowledge: Initialized knowledge base with processed documents
-    """
+
+# ── Document processing ───────────────────────────────────────────────────────
+
+def process_document(uploaded_file, vector_db: Qdrant) -> Knowledge:
     if not st.session_state.openai_api_key:
-        raise ValueError("OpenAI API key not provided")
-        
-    os.environ['OPENAI_API_KEY'] = st.session_state.openai_api_key
-    
-    try:
-        # Save the uploaded file to a temporary location
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-            temp_file.write(uploaded_file.getvalue())
-            temp_file_path = temp_file.name
-        
-        st.info("Loading and processing document...")
-        
-        # Create a Knowledge base with the vector_db
-        knowledge_base = Knowledge(
-            vector_db=vector_db
+        raise ValueError("OpenAI API key not provided.")
+
+    file_bytes = uploaded_file.getvalue()
+    size_mb = len(file_bytes) / (1024 * 1024)
+    if size_mb > MAX_FILE_SIZE_MB:
+        raise ValueError(
+            f"File is {size_mb:.1f} MB — exceeds the {MAX_FILE_SIZE_MB} MB limit."
         )
-        
-        # Add the document to the knowledge base
-        with st.spinner('📤 Loading documents into knowledge base...'):
-            try:
-                knowledge_base.add_content(path=temp_file_path)
-                st.success("✅ Documents stored successfully!")
-            except Exception as e:
-                st.error(f"Error loading documents: {str(e)}")
-                raise
-        
-        # Clean up the temporary file
+
+    os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
+
+    ext = uploaded_file.name.rsplit(".", 1)[-1].lower()
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
+            tmp.write(file_bytes)
+            tmp_path = tmp.name
+
+        knowledge_base = Knowledge(vector_db=vector_db)
+
+        with st.spinner("Loading document into knowledge base…"):
+            knowledge_base.add_content(path=tmp_path)
+
         try:
-            os.unlink(temp_file_path)
+            os.unlink(tmp_path)
         except Exception:
             pass
-            
+
+        st.session_state.current_doc_name = uploaded_file.name
+        st.session_state.current_doc_size_mb = size_mb
         return knowledge_base
-            
+
     except Exception as e:
-        st.error(f"Document processing error: {str(e)}")
-        raise Exception(f"Error processing document: {str(e)}")
+        raise RuntimeError(f"Document processing error: {e}") from e
+
+
+# ── Agent team ────────────────────────────────────────────────────────────────
+
+def build_legal_team(knowledge_base: Knowledge) -> Team:
+    os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
+
+    legal_researcher = Agent(
+        name="Legal Researcher",
+        role="Legal research specialist",
+        model=OpenAIChat(id="gpt-4o"),
+        tools=[DuckDuckGoTools()],
+        knowledge=knowledge_base,
+        search_knowledge=True,
+        instructions=[
+            "Find and cite relevant legal cases, statutes, and precedents.",
+            "Provide full citations including court, year, and jurisdiction.",
+            "Reference specific sections from the uploaded document.",
+            "Always search the knowledge base before using external sources.",
+            "Indicate the jurisdiction for every case you cite.",
+        ],
+        markdown=True,
+    )
+
+    contract_analyst = Agent(
+        name="Contract Analyst",
+        role="Contract analysis specialist",
+        model=OpenAIChat(id="gpt-4o"),
+        knowledge=knowledge_base,
+        search_knowledge=True,
+        instructions=[
+            "Review contracts thoroughly and systematically.",
+            "Identify key terms, obligations, rights, penalties, and missing clauses.",
+            "Rate the risk level of each issue as LOW, MEDIUM, HIGH, or CRITICAL.",
+            "Reference specific clause numbers or section headings from the document.",
+            "Flag ambiguous language that could lead to disputes.",
+        ],
+        markdown=True,
+    )
+
+    legal_strategist = Agent(
+        name="Legal Strategist",
+        role="Legal strategy specialist",
+        model=OpenAIChat(id="gpt-4o"),
+        knowledge=knowledge_base,
+        search_knowledge=True,
+        instructions=[
+            "Develop comprehensive legal strategies based on identified issues.",
+            "Provide concrete, prioritized, and actionable recommendations.",
+            "Suggest specific protective clauses or amendments where appropriate.",
+            "Consider both risks and opportunities in your strategy.",
+            "Order recommendations by urgency and potential impact.",
+        ],
+        markdown=True,
+    )
+
+    team = Team(
+        name="Legal Team Lead",
+        model=OpenAIChat(id="gpt-4o"),
+        members=[legal_researcher, contract_analyst, legal_strategist],
+        knowledge=knowledge_base,
+        search_knowledge=True,
+        instructions=[
+            "Coordinate all agents for a thorough, cohesive analysis.",
+            "Synthesize findings into a well-structured, clearly headed report.",
+            "Ensure all recommendations are sourced and referenced to the document.",
+            "Always search the knowledge base before delegating to team members.",
+            "Produce markdown output with clear section headings.",
+        ],
+        markdown=True,
+    )
+
+    return team
+
+
+# ── Export helper ─────────────────────────────────────────────────────────────
+
+def build_export_text(record: dict) -> str:
+    lines = [
+        "# Legal Analysis Report",
+        "",
+        f"**Document:** {record.get('document', 'Unknown')}",
+        f"**Analysis Type:** {record.get('type', 'Unknown')}",
+        f"**Jurisdiction:** {record.get('jurisdiction', 'N/A')}",
+        f"**Date:** {record.get('timestamp', 'Unknown')}",
+        "",
+        "---",
+        "",
+        "## Detailed Analysis",
+        "",
+        record.get("analysis", ""),
+        "",
+        "---",
+        "",
+        "## Key Points",
+        "",
+        record.get("key_points", ""),
+        "",
+        "---",
+        "",
+        "## Recommendations",
+        "",
+        record.get("recommendations", ""),
+    ]
+    return "\n".join(lines)
+
+
+# ── Main app ──────────────────────────────────────────────────────────────────
 
 def main():
-    st.set_page_config(page_title="Legal Document Analyzer", layout="wide")
+    st.set_page_config(
+        page_title="AI Legal Agent Team",
+        page_icon="⚖️",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
     init_session_state()
 
-    st.title("AI Legal Agent Team 👨‍⚖️")
-
+    # ── Sidebar ───────────────────────────────────────────────────────────────
     with st.sidebar:
-        st.header("🔑 API Configuration")
-   
-        openai_key = st.text_input(
-            "OpenAI API Key",
-            type="password",
-            value=st.session_state.openai_api_key if st.session_state.openai_api_key else "",
-            help="Enter your OpenAI API key"
-        )
-        if openai_key:
-            st.session_state.openai_api_key = openai_key
+        st.title("⚖️ Legal Agent")
 
-        qdrant_key = st.text_input(
-            "Qdrant API Key",
-            type="password",
-            value=st.session_state.qdrant_api_key if st.session_state.qdrant_api_key else "",
-            help="Enter your Qdrant API key"
-        )
-        if qdrant_key:
-            st.session_state.qdrant_api_key = qdrant_key
+        # API credentials
+        keys_ok = bool(st.session_state.openai_api_key)
+        with st.expander("🔑 API Keys", expanded=not keys_ok):
+            openai_key = st.text_input(
+                "OpenAI API Key",
+                type="password",
+                value=st.session_state.openai_api_key or "",
+                help="Loaded automatically from OPENAI_API_KEY in .env",
+            )
+            if openai_key:
+                st.session_state.openai_api_key = openai_key
 
-        qdrant_url = st.text_input(
-            "Qdrant URL",
-            value=st.session_state.qdrant_url if st.session_state.qdrant_url else "",
-            help="Enter your Qdrant instance URL"
-        )
-        if qdrant_url:
-            st.session_state.qdrant_url = qdrant_url
+            qdrant_key = st.text_input(
+                "Qdrant API Key",
+                type="password",
+                value=st.session_state.qdrant_api_key or "",
+                help="Loaded from QDRANT_API_KEY in .env",
+            )
+            if qdrant_key:
+                st.session_state.qdrant_api_key = qdrant_key
 
-        if all([st.session_state.qdrant_api_key, st.session_state.qdrant_url]):
-            try:
+            qdrant_url = st.text_input(
+                "Qdrant URL",
+                value=st.session_state.qdrant_url or "",
+                help="Loaded from QDRANT_URL in .env",
+            )
+            if qdrant_url:
+                st.session_state.qdrant_url = qdrant_url
+
+            all_creds = all([
+                st.session_state.openai_api_key,
+                st.session_state.qdrant_api_key,
+                st.session_state.qdrant_url,
+            ])
+
+            if all_creds:
                 if not st.session_state.vector_db:
-                    # Make sure we're initializing a QdrantClient here
-                    st.session_state.vector_db = init_qdrant()
-                    if st.session_state.vector_db:
-                        st.success("Successfully connected to Qdrant!")
-            except Exception as e:
-                st.error(f"Failed to connect to Qdrant: {str(e)}")
+                    if st.button("Connect to Qdrant", type="primary", use_container_width=True):
+                        with st.spinner("Connecting…"):
+                            st.session_state.vector_db = init_qdrant()
+                            if st.session_state.vector_db:
+                                st.success("Connected!")
+                                st.rerun()
+                else:
+                    st.success("Qdrant connected")
+            else:
+                st.info("Fill in all three fields, then connect.")
 
         st.divider()
 
-        if all([st.session_state.openai_api_key, st.session_state.vector_db]):
-            st.header("📄 Document Upload")
-            uploaded_file = st.file_uploader("Upload Legal Document", type=['pdf'])
-            
+        # Document upload (only shown once connected)
+        uploaded_file = None
+        analysis_type = list(ANALYSIS_CONFIGS.keys())[0]
+        jurisdiction = JURISDICTIONS[0]
+
+        if st.session_state.vector_db:
+            st.subheader("📄 Document")
+            uploaded_file = st.file_uploader(
+                "Upload Legal Document",
+                type=["pdf", "txt"],
+                help=f"PDF or TXT — max {MAX_FILE_SIZE_MB} MB",
+            )
+
             if uploaded_file:
-                # Check if this file has already been processed
+                size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
+                st.caption(f"{uploaded_file.name} ({size_mb:.1f} MB)")
+
                 if uploaded_file.name not in st.session_state.processed_files:
-                    with st.spinner("Processing document..."):
+                    with st.spinner("Processing…"):
                         try:
-                            # Process the document and get the knowledge base
-                            knowledge_base = process_document(uploaded_file, st.session_state.vector_db)
-                            
-                            if knowledge_base:
-                                st.session_state.knowledge_base = knowledge_base
-                                # Add the file to processed files
+                            kb = process_document(uploaded_file, st.session_state.vector_db)
+                            if kb:
+                                st.session_state.knowledge_base = kb
                                 st.session_state.processed_files.add(uploaded_file.name)
-                                
-                                # Initialize agents
-                                legal_researcher = Agent(
-                                    name="Legal Researcher",
-                                    role="Legal research specialist",
-                                    model=OpenAIChat(id="gpt-5"),
-                                    tools=[DuckDuckGoTools()],
-                                    knowledge=st.session_state.knowledge_base,
-                                    search_knowledge=True,
-                                    instructions=[
-                                        "Find and cite relevant legal cases and precedents",
-                                        "Provide detailed research summaries with sources",
-                                        "Reference specific sections from the uploaded document",
-                                        "Always search the knowledge base for relevant information"
-                                    ],
-                                    debug_mode=True,
-                                    markdown=True
-                                )
-
-                                contract_analyst = Agent(
-                                    name="Contract Analyst",
-                                    role="Contract analysis specialist",
-                                    model=OpenAIChat(id="gpt-5"),
-                                    knowledge=st.session_state.knowledge_base,
-                                    search_knowledge=True,
-                                    instructions=[
-                                        "Review contracts thoroughly",
-                                        "Identify key terms and potential issues",
-                                        "Reference specific clauses from the document"
-                                    ],
-                                    markdown=True
-                                )
-
-                                legal_strategist = Agent(
-                                    name="Legal Strategist", 
-                                    role="Legal strategy specialist",
-                                    model=OpenAIChat(id="gpt-5"),
-                                    knowledge=st.session_state.knowledge_base,
-                                    search_knowledge=True,
-                                    instructions=[
-                                        "Develop comprehensive legal strategies",
-                                        "Provide actionable recommendations",
-                                        "Consider both risks and opportunities"
-                                    ],
-                                    markdown=True
-                                )
-
-                                # Legal Agent Team
-                                st.session_state.legal_team = Team(
-                                    name="Legal Team Lead",
-                                    model=OpenAIChat(id="gpt-5"),
-                                    members=[legal_researcher, contract_analyst, legal_strategist],
-                                    knowledge=st.session_state.knowledge_base,
-                                    search_knowledge=True,
-                                    instructions=[
-                                        "Coordinate analysis between team members",
-                                        "Provide comprehensive responses",
-                                        "Ensure all recommendations are properly sourced",
-                                        "Reference specific parts of the uploaded document",
-                                        "Always search the knowledge base before delegating tasks"
-                                    ],
-                                    debug_mode=True,
-                                    markdown=True
-                                )
-                                
-                                st.success("✅ Document processed and team initialized!")
-                                
+                                st.session_state.legal_team = build_legal_team(kb)
+                                st.success("Ready for analysis!")
                         except Exception as e:
-                            st.error(f"Error processing document: {str(e)}")
+                            st.error(str(e))
                 else:
-                    # File already processed, just show a message
-                    st.success("✅ Document already processed and team ready!")
+                    st.success("Document ready")
 
             st.divider()
-            st.header("🔍 Analysis Options")
+            st.subheader("🔍 Analysis Type")
             analysis_type = st.selectbox(
-                "Select Analysis Type",
-                [
-                    "Contract Review",
-                    "Legal Research",
-                    "Risk Assessment",
-                    "Compliance Check",
-                    "Custom Query"
-                ]
+                "Type",
+                list(ANALYSIS_CONFIGS.keys()),
+                format_func=lambda x: f"{ANALYSIS_CONFIGS[x]['icon']} {x}",
+                label_visibility="collapsed",
             )
-        else:
-            st.warning("Please configure all API credentials to proceed")
+            st.caption(ANALYSIS_CONFIGS[analysis_type]["description"])
 
-    # Main content area
-    if not all([st.session_state.openai_api_key, st.session_state.vector_db]):
-        st.info("👈 Please configure your API credentials in the sidebar to begin")
-    elif not uploaded_file:
-        st.info("👈 Please upload a legal document to begin analysis")
-    elif st.session_state.legal_team:
-        # Create a dictionary for analysis type icons
-        analysis_icons = {
-            "Contract Review": "📑",
-            "Legal Research": "🔍",
-            "Risk Assessment": "⚠️",
-            "Compliance Check": "✅",
-            "Custom Query": "💭"
+            st.divider()
+            st.subheader("🌍 Jurisdiction")
+            jurisdiction = st.selectbox(
+                "Jurisdiction",
+                JURISDICTIONS,
+                label_visibility="collapsed",
+            )
+
+        # History counter
+        if st.session_state.analysis_history:
+            st.divider()
+            n = len(st.session_state.analysis_history)
+            col_a, col_b = st.columns([2, 1])
+            with col_a:
+                st.caption(f"📜 {n} saved {'analysis' if n == 1 else 'analyses'}")
+            with col_b:
+                if st.button("Clear", use_container_width=True):
+                    st.session_state.analysis_history = []
+                    st.rerun()
+
+    # ── Page header ───────────────────────────────────────────────────────────
+    hcol1, hcol2 = st.columns([3, 1])
+    with hcol1:
+        st.title("AI Legal Agent Team")
+        st.caption("Multi-agent legal analysis powered by GPT-4o")
+    with hcol2:
+        if st.session_state.legal_team:
+            st.success("System ready")
+        elif st.session_state.vector_db:
+            st.info("Awaiting document")
+        else:
+            st.warning("Setup required")
+
+    # ── Onboarding ────────────────────────────────────────────────────────────
+    if not st.session_state.vector_db:
+        st.info("Configure your API credentials in the sidebar to begin.")
+        with st.expander("How to get started"):
+            st.markdown(
+                """
+**Step 1 — OpenAI API Key**
+Get yours from [platform.openai.com](https://platform.openai.com/account/api-keys).
+
+**Step 2 — Qdrant Vector Database**
+Create a free cluster at [cloud.qdrant.io](https://cloud.qdrant.io). Copy the URL and API key.
+
+**Step 3 — (Optional) .env file**
+Add your keys so they load automatically:
+```
+OPENAI_API_KEY=sk-...
+QDRANT_API_KEY=...
+QDRANT_URL=https://....qdrant.io
+```
+
+**Step 4 — Upload a document**
+PDF or plain-text legal documents up to 10 MB are supported.
+
+**Step 5 — Analyze**
+Choose an analysis type, set your jurisdiction, and click **Analyze Document**.
+"""
+            )
+        return
+
+    if not (uploaded_file and st.session_state.legal_team):
+        _render_history()
+        if not st.session_state.analysis_history:
+            st.info("Upload a legal document in the sidebar to begin.")
+        return
+
+    # ── Analysis panel ────────────────────────────────────────────────────────
+    cfg = ANALYSIS_CONFIGS[analysis_type]
+    st.header(f"{cfg['icon']} {analysis_type}")
+    st.caption(
+        f"Agents: {', '.join(cfg['agents'])}  ·  Jurisdiction: {jurisdiction}"
+    )
+
+    user_query = None
+    if analysis_type == "Custom Query":
+        user_query = st.text_area(
+            "Your legal question:",
+            height=100,
+            placeholder=(
+                "e.g., What are each party's termination rights, "
+                "and what notice periods apply?"
+            ),
+        )
+
+    if st.button("Analyze Document", type="primary"):
+        if analysis_type == "Custom Query" and not user_query:
+            st.warning("Please enter a query.")
+            return
+
+        os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
+
+        # Build combined query
+        jnote = (
+            f"\n\nJurisdiction: {jurisdiction}"
+            if jurisdiction != "General / International"
+            else ""
+        )
+        base = cfg["query"] if analysis_type != "Custom Query" else user_query
+        full_query = (
+            f"Using the uploaded legal document as the primary reference:\n\n"
+            f"{base}"
+            f"{jnote}\n\n"
+            f"Agents assigned: {', '.join(cfg['agents'])}\n"
+            f"Search the knowledge base and cite specific sections of the document."
+        )
+
+        record: dict = {
+            "type": analysis_type,
+            "icon": cfg["icon"],
+            "document": st.session_state.current_doc_name or "Unknown",
+            "jurisdiction": jurisdiction,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "analysis": "",
+            "key_points": "",
+            "recommendations": "",
         }
 
-        # Dynamic header with icon
-        st.header(f"{analysis_icons[analysis_type]} {analysis_type} Analysis")
-  
-        analysis_configs = {
-            "Contract Review": {
-                "query": "Review this contract and identify key terms, obligations, and potential issues.",
-                "agents": ["Contract Analyst"],
-                "description": "Detailed contract analysis focusing on terms and obligations"
-            },
-            "Legal Research": {
-                "query": "Research relevant cases and precedents related to this document.",
-                "agents": ["Legal Researcher"],
-                "description": "Research on relevant legal cases and precedents"
-            },
-            "Risk Assessment": {
-                "query": "Analyze potential legal risks and liabilities in this document.",
-                "agents": ["Contract Analyst", "Legal Strategist"],
-                "description": "Combined risk analysis and strategic assessment"
-            },
-            "Compliance Check": {
-                "query": "Check this document for regulatory compliance issues.",
-                "agents": ["Legal Researcher", "Contract Analyst", "Legal Strategist"],
-                "description": "Comprehensive compliance analysis"
-            },
-            "Custom Query": {
-                "query": None,
-                "agents": ["Legal Researcher", "Contract Analyst", "Legal Strategist"],
-                "description": "Custom analysis using all available agents"
-            }
-        }
+        progress = st.progress(0, text="Starting analysis…")
 
-        st.info(f"📋 {analysis_configs[analysis_type]['description']}")
-        st.write(f"🤖 Active Legal AI Agents: {', '.join(analysis_configs[analysis_type]['agents'])}")  #dictionary!!
+        try:
+            progress.progress(15, text="Running primary analysis…")
+            r1: RunOutput = st.session_state.legal_team.run(full_query)
+            analysis_text = _extract_content(r1)
+            record["analysis"] = analysis_text
 
-        # Replace the existing user_query section with this:
-        if analysis_type == "Custom Query":
-            user_query = st.text_area(
-                "Enter your specific query:",
-                help="Add any specific questions or points you want to analyze"
+            progress.progress(50, text="Extracting key points…")
+            r2: RunOutput = st.session_state.legal_team.run(
+                f"Based on this analysis:\n\n{analysis_text}\n\n"
+                f"List the 5–8 most important key points as concise bullet points. "
+                f"Focus on findings from: {', '.join(cfg['agents'])}."
             )
-        else:
-            user_query = None  # Set to None for non-custom queries
+            kp_text = _extract_content(r2)
+            record["key_points"] = kp_text
+
+            progress.progress(80, text="Generating recommendations…")
+            r3: RunOutput = st.session_state.legal_team.run(
+                f"Based on this analysis:\n\n{analysis_text}\n\n"
+                f"Provide 3–5 specific, actionable recommendations in priority order. "
+                f"Be concrete about what to do and why."
+            )
+            rec_text = _extract_content(r3)
+            record["recommendations"] = rec_text
+
+            progress.progress(100, text="Done!")
+            progress.empty()
+
+            st.session_state.analysis_history.append(record)
+
+            _render_result_tabs(record)
+
+            # Download button
+            export_md = build_export_text(record)
+            fname = (
+                f"legal_{analysis_type.lower().replace(' ', '_')}_"
+                f"{datetime.now().strftime('%Y%m%d_%H%M')}.md"
+            )
+            st.download_button(
+                "⬇ Download Report (.md)",
+                data=export_md,
+                file_name=fname,
+                mime="text/markdown",
+            )
+
+        except Exception as e:
+            progress.empty()
+            st.error(f"Analysis failed: {e}")
+
+    # Previous analyses in this session
+    prior = st.session_state.analysis_history[:-1] if st.session_state.analysis_history else []
+    if prior:
+        st.divider()
+        st.subheader("Previous analyses this session")
+        _render_history(records=prior)
 
 
-        if st.button("Analyze"):
-            if analysis_type == "Custom Query" and not user_query:
-                st.warning("Please enter a query")
-            else:
-                with st.spinner("Analyzing document..."):
-                    try:
-                        # Ensure OpenAI API key is set
-                        os.environ['OPENAI_API_KEY'] = st.session_state.openai_api_key
-                        
-                        # Combine predefined and user queries
-                        if analysis_type != "Custom Query":
-                            combined_query = f"""
-                            Using the uploaded document as reference:
-                            
-                            Primary Analysis Task: {analysis_configs[analysis_type]['query']}
-                            Focus Areas: {', '.join(analysis_configs[analysis_type]['agents'])}
-                            
-                            Please search the knowledge base and provide specific references from the document.
-                            """
-                        else:
-                            combined_query = f"""
-                            Using the uploaded document as reference:
-                            
-                            {user_query}
-                            
-                            Please search the knowledge base and provide specific references from the document.
-                            Focus Areas: {', '.join(analysis_configs[analysis_type]['agents'])}
-                            """
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-                        response: RunOutput = st.session_state.legal_team.run(combined_query)
-                        
-                        # Display results in tabs
-                        tabs = st.tabs(["Analysis", "Key Points", "Recommendations"])
-                        
-                        with tabs[0]:
-                            st.markdown("### Detailed Analysis")
-                            if response.content:
-                                st.markdown(response.content)
-                            else:
-                                for message in response.messages:
-                                    if message.role == 'assistant' and message.content:
-                                        st.markdown(message.content)
-                        
-                        with tabs[1]:
-                            st.markdown("### Key Points")
-                            key_points_response: RunOutput = st.session_state.legal_team.run(
-                                f"""Based on this previous analysis:    
-                                {response.content}
-                                
-                                Please summarize the key points in bullet points.
-                                Focus on insights from: {', '.join(analysis_configs[analysis_type]['agents'])}"""
-                            )
-                            if key_points_response.content:
-                                st.markdown(key_points_response.content)
-                            else:
-                                for message in key_points_response.messages:
-                                    if message.role == 'assistant' and message.content:
-                                        st.markdown(message.content)
-                        
-                        with tabs[2]:
-                            st.markdown("### Recommendations")
-                            recommendations_response: RunOutput = st.session_state.legal_team.run(
-                                f"""Based on this previous analysis:
-                                {response.content}
-                                
-                                What are your key recommendations based on the analysis, the best course of action?
-                                Provide specific recommendations from: {', '.join(analysis_configs[analysis_type]['agents'])}"""
-                            )
-                            if recommendations_response.content:
-                                st.markdown(recommendations_response.content)
-                            else:
-                                for message in recommendations_response.messages:
-                                    if message.role == 'assistant' and message.content:
-                                        st.markdown(message.content)
+def _extract_content(run_output: RunOutput) -> str:
+    if run_output.content:
+        return run_output.content
+    return "\n".join(
+        m.content
+        for m in run_output.messages
+        if m.role == "assistant" and m.content
+    )
 
-                    except Exception as e:
-                        st.error(f"Error during analysis: {str(e)}")
-    else:
-        st.info("Please upload a legal document to begin analysis")
+
+def _render_result_tabs(record: dict):
+    tabs = st.tabs(["Analysis", "Key Points", "Recommendations"])
+    meta = (
+        f"**Document:** {record['document']}  ·  "
+        f"**Type:** {record['type']}  ·  "
+        f"**Jurisdiction:** {record['jurisdiction']}  ·  "
+        f"**Date:** {record['timestamp']}"
+    )
+    with tabs[0]:
+        st.caption(meta)
+        st.markdown(record["analysis"])
+    with tabs[1]:
+        st.markdown(record["key_points"])
+    with tabs[2]:
+        st.markdown(record["recommendations"])
+
+
+def _render_history(records: list | None = None):
+    if records is None:
+        records = list(reversed(st.session_state.analysis_history))
+    for i, rec in enumerate(records):
+        label = (
+            f"{rec['icon']} {rec['type']} — "
+            f"{rec['document']} ({rec['timestamp']})"
+        )
+        with st.expander(label):
+            _render_result_tabs(rec)
+            export_md = build_export_text(rec)
+            st.download_button(
+                "⬇ Download",
+                data=export_md,
+                file_name=f"legal_{i}.md",
+                mime="text/markdown",
+                key=f"hist_dl_{i}_{rec['timestamp']}",
+            )
+
 
 if __name__ == "__main__":
-    main() 
+    main()
+
