@@ -2,12 +2,8 @@ import streamlit as st
 from agno.agent import Agent
 from agno.run.agent import RunOutput
 from agno.team import Team
-from agno.knowledge.knowledge import Knowledge
-from agno.vectordb.qdrant import Qdrant
 from agno.tools.duckduckgo import DuckDuckGoTools
 from agno.models.openai import OpenAIChat
-from agno.knowledge.embedder.openai import OpenAIEmbedder
-import tempfile
 import os
 from datetime import datetime
 from dotenv import load_dotenv
@@ -93,49 +89,36 @@ JURISDICTIONS = [
 def init_session_state():
     defaults = {
         "openai_api_key": os.getenv("OPENAI_API_KEY", ""),
-        "qdrant_api_key": os.getenv("QDRANT_API_KEY", ""),
-        "qdrant_url": os.getenv("QDRANT_URL", ""),
-        "vector_db": None,
         "legal_team": None,
-        "knowledge_base": None,
         "processed_files": set(),
         "analysis_history": [],
         "current_doc_name": None,
         "current_doc_size_mb": None,
+        "document_text": "",
     }
     for key, default in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = default
 
 
-# ── Qdrant ────────────────────────────────────────────────────────────────────
-
-def init_qdrant() -> Qdrant | None:
-    if not all([
-        st.session_state.qdrant_api_key,
-        st.session_state.qdrant_url,
-        st.session_state.openai_api_key,
-    ]):
-        return None
-    try:
-        vector_db = Qdrant(
-            collection=COLLECTION_NAME,
-            url=st.session_state.qdrant_url,
-            api_key=st.session_state.qdrant_api_key,
-            embedder=OpenAIEmbedder(
-                id="text-embedding-3-small",
-                api_key=st.session_state.openai_api_key,
-            ),
-        )
-        return vector_db
-    except Exception as e:
-        st.error(f"Qdrant connection failed: {e}")
-        return None
-
-
 # ── Document processing ───────────────────────────────────────────────────────
 
-def process_document(uploaded_file, vector_db: Qdrant) -> Knowledge:
+MAX_PROMPT_CHARS = 60_000   # ~15k tokens — well within GPT-4o's 128k context
+
+def _extract_text(uploaded_file) -> str:
+    """Return plain text from a PDF or TXT upload."""
+    ext = uploaded_file.name.rsplit(".", 1)[-1].lower()
+    if ext == "txt":
+        return uploaded_file.getvalue().decode("utf-8", errors="ignore")
+    # PDF
+    from pypdf import PdfReader
+    import io
+    reader = PdfReader(io.BytesIO(uploaded_file.getvalue()))
+    return "\n\n".join(page.extract_text() or "" for page in reader.pages)
+
+
+def process_document(uploaded_file) -> bool:
+    """Extract text from the uploaded file and store it in session state."""
     if not st.session_state.openai_api_key:
         raise ValueError("OpenAI API key not provided.")
 
@@ -148,33 +131,24 @@ def process_document(uploaded_file, vector_db: Qdrant) -> Knowledge:
 
     os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
 
-    ext = uploaded_file.name.rsplit(".", 1)[-1].lower()
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
-            tmp.write(file_bytes)
-            tmp_path = tmp.name
+    with st.spinner("Extracting document text…"):
+        text = _extract_text(uploaded_file)
 
-        knowledge_base = Knowledge(vector_db=vector_db)
+    if not text.strip():
+        raise ValueError(
+            "Could not extract any text from this file. "
+            "The PDF may be scanned/image-based. Please use a text-based PDF or TXT."
+        )
 
-        with st.spinner("Loading document into knowledge base…"):
-            knowledge_base.add_content(path=tmp_path)
-
-        try:
-            os.unlink(tmp_path)
-        except Exception:
-            pass
-
-        st.session_state.current_doc_name = uploaded_file.name
-        st.session_state.current_doc_size_mb = size_mb
-        return knowledge_base
-
-    except Exception as e:
-        raise RuntimeError(f"Document processing error: {e}") from e
+    st.session_state.document_text = text
+    st.session_state.current_doc_name = uploaded_file.name
+    st.session_state.current_doc_size_mb = size_mb
+    return True
 
 
 # ── Agent team ────────────────────────────────────────────────────────────────
 
-def build_legal_team(knowledge_base: Knowledge) -> Team:
+def build_legal_team() -> Team:
     os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
 
     legal_researcher = Agent(
@@ -182,13 +156,11 @@ def build_legal_team(knowledge_base: Knowledge) -> Team:
         role="Legal research specialist",
         model=OpenAIChat(id="gpt-4o"),
         tools=[DuckDuckGoTools()],
-        knowledge=knowledge_base,
-        search_knowledge=True,
         instructions=[
+            "The full contract/document text is provided directly in the query.",
             "Find and cite relevant legal cases, statutes, and precedents.",
             "Provide full citations including court, year, and jurisdiction.",
-            "Reference specific sections from the uploaded document.",
-            "Always search the knowledge base before using external sources.",
+            "Reference specific sections from the document text supplied.",
             "Indicate the jurisdiction for every case you cite.",
         ],
         markdown=True,
@@ -198,10 +170,9 @@ def build_legal_team(knowledge_base: Knowledge) -> Team:
         name="Contract Analyst",
         role="Contract analysis specialist",
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=knowledge_base,
-        search_knowledge=True,
         instructions=[
-            "Review contracts thoroughly and systematically.",
+            "The full contract/document text is provided directly in the query.",
+            "Review the document thoroughly and systematically.",
             "Identify key terms, obligations, rights, penalties, and missing clauses.",
             "Rate the risk level of each issue as LOW, MEDIUM, HIGH, or CRITICAL.",
             "Reference specific clause numbers or section headings from the document.",
@@ -214,9 +185,8 @@ def build_legal_team(knowledge_base: Knowledge) -> Team:
         name="Legal Strategist",
         role="Legal strategy specialist",
         model=OpenAIChat(id="gpt-4o"),
-        knowledge=knowledge_base,
-        search_knowledge=True,
         instructions=[
+            "The full contract/document text is provided directly in the query.",
             "Develop comprehensive legal strategies based on identified issues.",
             "Provide concrete, prioritized, and actionable recommendations.",
             "Suggest specific protective clauses or amendments where appropriate.",
@@ -230,13 +200,11 @@ def build_legal_team(knowledge_base: Knowledge) -> Team:
         name="Legal Team Lead",
         model=OpenAIChat(id="gpt-4o"),
         members=[legal_researcher, contract_analyst, legal_strategist],
-        knowledge=knowledge_base,
-        search_knowledge=True,
         instructions=[
+            "The full document text is embedded in the query — use it as the primary source.",
             "Coordinate all agents for a thorough, cohesive analysis.",
             "Synthesize findings into a well-structured, clearly headed report.",
             "Ensure all recommendations are sourced and referenced to the document.",
-            "Always search the knowledge base before delegating to team members.",
             "Produce markdown output with clear section headings.",
         ],
         markdown=True,
@@ -292,9 +260,9 @@ def main():
     with st.sidebar:
         st.title("⚖️ Legal Agent")
 
-        # API credentials
+        # API key
         keys_ok = bool(st.session_state.openai_api_key)
-        with st.expander("🔑 API Keys", expanded=not keys_ok):
+        with st.expander("🔑 API Key", expanded=not keys_ok):
             openai_key = st.text_input(
                 "OpenAI API Key",
                 type="password",
@@ -303,51 +271,19 @@ def main():
             )
             if openai_key:
                 st.session_state.openai_api_key = openai_key
-
-            qdrant_key = st.text_input(
-                "Qdrant API Key",
-                type="password",
-                value=st.session_state.qdrant_api_key or "",
-                help="Loaded from QDRANT_API_KEY in .env",
-            )
-            if qdrant_key:
-                st.session_state.qdrant_api_key = qdrant_key
-
-            qdrant_url = st.text_input(
-                "Qdrant URL",
-                value=st.session_state.qdrant_url or "",
-                help="Loaded from QDRANT_URL in .env",
-            )
-            if qdrant_url:
-                st.session_state.qdrant_url = qdrant_url
-
-            all_creds = all([
-                st.session_state.openai_api_key,
-                st.session_state.qdrant_api_key,
-                st.session_state.qdrant_url,
-            ])
-
-            if all_creds:
-                if not st.session_state.vector_db:
-                    if st.button("Connect to Qdrant", type="primary", use_container_width=True):
-                        with st.spinner("Connecting…"):
-                            st.session_state.vector_db = init_qdrant()
-                            if st.session_state.vector_db:
-                                st.success("Connected!")
-                                st.rerun()
-                else:
-                    st.success("Qdrant connected")
+            if st.session_state.openai_api_key:
+                st.success("API key set")
             else:
-                st.info("Fill in all three fields, then connect.")
+                st.info("Enter your OpenAI API key to continue.")
 
         st.divider()
 
-        # Document upload (only shown once connected)
+        # Document upload
         uploaded_file = None
         analysis_type = list(ANALYSIS_CONFIGS.keys())[0]
         jurisdiction = JURISDICTIONS[0]
 
-        if st.session_state.vector_db:
+        if st.session_state.openai_api_key:
             st.subheader("📄 Document")
             uploaded_file = st.file_uploader(
                 "Upload Legal Document",
@@ -362,11 +298,9 @@ def main():
                 if uploaded_file.name not in st.session_state.processed_files:
                     with st.spinner("Processing…"):
                         try:
-                            kb = process_document(uploaded_file, st.session_state.vector_db)
-                            if kb:
-                                st.session_state.knowledge_base = kb
+                            if process_document(uploaded_file):
                                 st.session_state.processed_files.add(uploaded_file.name)
-                                st.session_state.legal_team = build_legal_team(kb)
+                                st.session_state.legal_team = build_legal_team()
                                 st.success("Ready for analysis!")
                         except Exception as e:
                             st.error(str(e))
@@ -425,22 +359,23 @@ def main():
 **Step 1 — OpenAI API Key**
 Get yours from [platform.openai.com](https://platform.openai.com/account/api-keys).
 
-**Step 2 — Qdrant Vector Database**
-Create a free cluster at [cloud.qdrant.io](https://cloud.qdrant.io). Copy the URL and API key.
+**Step 2 — Choose storage mode**
+
+- **Local (recommended for quick start)** — select *Local (no cloud needed)* in the sidebar. No Qdrant account required. Documents are stored on disk in `./qdrant_local_db/`.
+- **Qdrant Cloud** — create a free cluster at [cloud.qdrant.io](https://cloud.qdrant.io). Use the **full-access API key** (not the read-only key).
 
 **Step 3 — (Optional) .env file**
-Add your keys so they load automatically:
 ```
 OPENAI_API_KEY=sk-...
-QDRANT_API_KEY=...
-QDRANT_URL=https://....qdrant.io
+QDRANT_API_KEY=...      # only needed for Cloud mode
+QDRANT_URL=https://....qdrant.io   # only needed for Cloud mode
 ```
 
 **Step 4 — Upload a document**
-PDF or plain-text legal documents up to 10 MB are supported.
+PDF or plain-text, up to 10 MB.
 
 **Step 5 — Analyze**
-Choose an analysis type, set your jurisdiction, and click **Analyze Document**.
+Choose an analysis type, jurisdiction, and click **Analyze Document**.
 """
             )
         return
