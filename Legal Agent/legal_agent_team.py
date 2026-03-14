@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MAX_FILE_SIZE_MB = 10
-COLLECTION_NAME = "legal_documents"
 
 ANALYSIS_CONFIGS = {
     "Contract Review": {
